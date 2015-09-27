@@ -9,7 +9,7 @@ import numpy
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 
-path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case267'
+path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case257'
 
 def main():
     registrationParameters = {}
