@@ -9,7 +9,7 @@ import numpy
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 
-path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case263'
+path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case267'
 
 def main():
     registrationParameters = {}
@@ -62,7 +62,7 @@ def main():
     planningLabelNode = None
     
     # Load planning image
-    for index in range(1, 10):
+    for index in range(1, 50):
         planningImageFileName ='%s/planning-%02d.nrrd' % (path, index)
         planningLabelFileName ='%s/planning-%02d-label.nrrd' % (path, index)
         if os.path.isfile(planningImageFileName) and os.path.isfile(planningLabelFileName):
@@ -71,7 +71,7 @@ def main():
             break
     
     if not (planningImageNode and planningLabelNode):
-        quit()
+        return
     
     sindex = index
     
@@ -79,7 +79,7 @@ def main():
     firstNeedleLabelNode = None
     
     # Load first needle image
-    for index in range(sindex, 30):
+    for index in range(sindex, 50):
     
         firstNeedleImageFileName ='%s/needle-t-%02d.nrrd' % (path, index)
         firstNeedleLabelFileName ='%s/needle-t-%02d-label.nrrd' % (path, index)
