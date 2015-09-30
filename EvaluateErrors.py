@@ -21,6 +21,13 @@ dataFile = 'RobotCase-Log.csv'
 
 def main():
 
+    # Open result file
+    lt = time.localtime()
+    resultFileName = "result-%04d-%02d-%02d-%02d-%02d-%02d.csv" % (lt.tm_year, lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec)
+    resultFilePath = path + '/' + resultFileName
+    resultFile = open(resultFilePath, 'a')
+    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core\n") ## CSV header
+    
     # Initialize CurveMaker module
     slicer.util.selectModule('CurveMaker')
     cmlogic = slicer.modules.CurveMakerWidget.logic
@@ -31,6 +38,18 @@ def main():
     caseIndex = -1
     targetIndex = -1
     imageIndex = -1
+    robotTgtRIndex = -1
+    robotTgtAIndex = -1
+    robotTgtSIndex = -1
+    bevelIndex = -1
+    segmentLRIndex = -1    # Left - Right
+    segmentZoneIndex = -1  # CG, TZ, or PZ
+    segmentABIndex = -1    # Apex, Base, or Mid gland
+    segmentAPIndex = -1    # Anterior - Posterior
+    depthStartIndex = -1
+    depthEndIndex = -1
+    coreIndex = -1
+    
     caseData = []
     
     with open(path+'/'+dataFile, 'rU') as f:
@@ -44,7 +63,15 @@ def main():
                 robotTgtRIndex = row.index('TgtR')
                 robotTgtAIndex = row.index('TgtA')
                 robotTgtSIndex = row.index('TgtS')
-
+                bevelIndex = row.index('Bevel')
+                segmentLRIndex = row.index('LR')
+                segmentZoneIndex = row.index('Zone')
+                segmentABIndex = row.index('AB')
+                segmentAPIndex = row.index('AP')
+                depthStartIndex = row.index('DepthStart')
+                depthEndIndex = row.index('DepthEnd')
+                coreIndex = row.index('Core')
+                
             else:
                 case = int(row[caseIndex])
                 target = int(row[targetIndex])
@@ -52,10 +79,28 @@ def main():
                 robotTgtR = float(row[robotTgtRIndex])
                 robotTgtA = float(row[robotTgtAIndex])
                 robotTgtS = float(row[robotTgtSIndex])
-                caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS]))
+                bevel = int(row[bevelIndex])
+                segmentLR = row[segmentLRIndex]
+                segmentZone = row[segmentZoneIndex]
+                segmentAB = row[segmentABIndex]
+                segmentAP = row[segmentAPIndex]
+                depthStart = float(row[depthStartIndex])
+                depthEnd = float(row[depthEndIndex])
+                core = row[coreIndex]
 
-    for (case, target, image, robotTgt) in caseData:
+                caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], [depthStart, depthEnd], core))
 
+    prevCase = -1
+    prevTarget = -1
+    prevRobotTgtOffset = numpy.array([0.0, 0.0, 0.0])
+    prevBiopsyTgtOffset = numpy.array([0.0, 0.0, 0.0])
+    
+    for (case, target, image, robotTgt, bevel, segment, depth, core) in caseData:
+
+        newTarget = False
+        if (case != prevCase) or (target != prevTarget):
+            newTarget = True
+       
         print 'Processing for case=%d, image=%d...' % (case, image)
         
         # Load targets
@@ -123,18 +168,70 @@ def main():
 
         # Calculate targeting error
         (robotTgtDist, robotTgtOffset) = cmlogic.distanceToPoint(robotTgt, True)
-        print 'TARGETING ERROR: %.3f, (%.3f, %.3f, %.3f)' % (robotTgtDist, robotTgtOffset[0], robotTgtOffset[1], robotTgtOffset[2])
+        ## Note that the returned offest is a vector from the line to the target. Error vector is the inverse.
+        robotTgtOffset = -robotTgtOffset 
+        print 'TARGETING ERROR: %.3f, (%.3f, %.3f, %.3f)' % (robotTgtDist, robotTgtOffset[0], robotTgtOffset[1], -robotTgtOffset[2])
 
         # Calculate biopsy error
         (biopsyTgtDist, biopsyTgtOffset) = cmlogic.distanceToPoint(biopsyTgt, True)
+        ## Note that the returned offest is a vector from the line to the target. Error vector is the inverse.
+        biopsyTgtOffset = -biopsyTgtOffset
         print 'BIOPSY ERROR: %.3f, (%.3f, %.3f, %.3f)' % (biopsyTgtDist, biopsyTgtOffset[0], biopsyTgtOffset[1], biopsyTgtOffset[2])
 
+        # Convert bevel direction to angle
+        bevelAngle = bevel*30.0
+
+        # Error angle -- 12 O'clock is zero
+        robotErrorAngle = 90.0-(numpy.arctan2(robotTgtOffset[1], -robotTgtOffset[0]) *  180.0 / numpy.pi)
+        biopsyErrorAngle = 90.0-(numpy.arctan2(biopsyTgtOffset[1], -biopsyTgtOffset[0]) *  180.0 / numpy.pi)
+        if robotErrorAngle < 0.0:
+            robotErrorAngle = robotErrorAngle + 360.0
+        if biopsyErrorAngle < 0.0:
+            biopsyErrorAngle = biopsyErrorAngle + 360.0
+
+        # Delta error angle -- 12 O'clock is zero
+        ## Delta error angle is an angle of the offest from the first attempt
+        deltaRobotErrorAngle = 0.0
+        deltaBiopsyErrorAngle = 0.0
+        if newTarget:
+            prevRobotTgtOffset = robotTgtOffset
+            prevBiopsyTgtOffset = biopsyTgtOffset
+        else:
+            deltaRobotTgtOffset = robotTgtOffset - prevRobotTgtOffset
+            deltaBiopsyTgtOffset = biopsyTgtOffset - prevBiopsyTgtOffset
+            deltaRobotErrorAngle = 90.0-(numpy.arctan2(deltaRobotTgtOffset[1], -deltaRobotTgtOffset[0]) *  180.0 / numpy.pi)
+            deltaBiopsyErrorAngle = 90.0-(numpy.arctan2(deltaBiopsyTgtOffset[1], -deltaBiopsyTgtOffset[0]) *  180.0 / numpy.pi)
+            if deltaRobotErrorAngle < 0.0:
+                deltaRobotErrorAngle = deltaRobotErrorAngle + 360.0
+            if deltaBiopsyErrorAngle < 0.0:
+                deltaBiopsyErrorAngle = deltaBiopsyErrorAngle + 360.0
+                
+            prevRobotTgtOffset = robotTgtOffset
+            prevBiopsyTgtOffset = biopsyTgtOffset
+
+
+        # Output results
+        resultFile.write("%d,%d,%d," % (case, image, target))
+        resultFile.write("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f," % (robotTgtDist, robotTgtOffset[0], robotTgtOffset[1], robotTgtOffset[2], robotErrorAngle, deltaRobotErrorAngle))
+        resultFile.write("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f," % (biopsyTgtDist, biopsyTgtOffset[0], biopsyTgtOffset[1], biopsyTgtOffset[2], biopsyErrorAngle, deltaBiopsyErrorAngle))
+        resultFile.write("%.3f," % bevelAngle)
+        resultFile.write("%s,%s,%s,%s," % (segment[0], segment[1], segment[2], segment[3]))
+        resultFile.write("%.3f,%.3f," % (depth[0], depth[1]))
+        resultFile.write("%s\n" % core)
+                         
         cmlogic.SourceNode = None
         cmlogic.DestinationNode = None
         slicer.mrmlScene.RemoveNode(transformNode)
         slicer.mrmlScene.RemoveNode(targetsNode)
         slicer.mrmlScene.RemoveNode(destNode)
         slicer.mrmlScene.RemoveNode(trajectoryNode)
+
+        prevCase = case
+        prevTarget = target
+            
+
+    if resultFile:
+        resultFile.close()
 
 
 if __name__ ==  "__main__":
