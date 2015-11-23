@@ -1,5 +1,6 @@
 path = "/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/"
-dataFile = "result-2015-09-28-23-34-36.csv"
+#dataFile = "result-2015-09-28-23-34-36.csv"
+dataFile = "result-2015-10-28-09-09-31.csv"
 data = read.csv(sprintf("%s/%s", path, dataFile))
 
 # Process
@@ -58,7 +59,7 @@ for (i in 1:n) {
     }
 }
 
-    
+
 # Calculate estimated error angle
 bevelAnglePrevious <- 0.0
 estimatedAngles <- c()
@@ -112,6 +113,13 @@ print(sprintf("Biopsy Error (1st attempts)    : %.3f +/- %.3f (mm)", mean(data$B
 print(sprintf("Biopsy Error (sampled)         : %.3f +/- %.3f (mm)", mean(data$BxErr[data$Sampled]), sd(data$BxErr[data$Sampled])))
 
 
+print(sprintf("RMS Targeting Error (all attempts) : %.3f (mm)", sqrt(mean(data$TgtErr^2))))
+print(sprintf("RMS Targeting Error (1st attempts) : %.3f (mm)", sqrt(mean(data$TgtErr[data$First]^2))))
+print(sprintf("RMS Targeting Error (sampled)      : %.3f (mm)", sqrt(mean(data$TgtErr[data$Sampled]^2))))
+print(sprintf("RMS Biopsy Error (all attempts)    : %.3f (mm)", sqrt(mean(data$BxErr^2))))
+print(sprintf("RMS Biopsy Error (1st attempts)    : %.3f (mm)", sqrt(mean(data$BxErr[data$First]^2))))
+print(sprintf("RMS Biopsy Error (sampled)         : %.3f (mm)", sqrt(mean(data$BxErr[data$Sampled]^2))))
+
 
 ##
 ## Distance vs Targeting Error
@@ -122,6 +130,7 @@ reg1 <- lm(data$DepthEnd~data$TgtErr)
 plot(data$DepthEnd, data$TgtErr, main=sprintf("Needle Insertion Depth vs Targeting Error (r=%f)", R), xlab="Insertion Depth (mm)", ylab="Targeting Error (mm)")
 abline(reg1)
 dev.off()
+
 
 ##
 ## Targeting Errors in RL
@@ -143,7 +152,7 @@ plot(data$SegmentAP, data$TgtErrA, main=sprintf("Target Region vs Targeting Erro
 dev.off()
 
 ##
-## Targeting Errors in AP
+## Targeting Errors in AMB
 ##
 t.am = t.test(data$TgtErr[data$SegmentAB=='A'], data$TgtErr[data$SegmentAB=='M'])
 t.mb = t.test(data$TgtErr[data$SegmentAB=='M'], data$TgtErr[data$SegmentAB=='B'])
@@ -151,6 +160,46 @@ t.ab = t.test(data$TgtErr[data$SegmentAB=='A'], data$TgtErr[data$SegmentAB=='B']
 pdf(sprintf("%s/Result-SegmentAB-TgtError.pdf", path))
 plot(data$SegmentAB, data$TgtErr, main="Target Region vs Targeting Error (Apex/Base/Mid)", xlab=sprintf( "Target Region (A vs M: p=%f; M vs B: p=%f; A vs B: p=%f)", t.am$p.value, t.mb$p.value, t.ab$p.value), ylab="Targeting Error (mm)")
 dev.off()
+
+
+
+##
+## Targeting Errors in RL
+##
+
+wtest <- wilcox.test(data$TgtErr[data$SegmentLR=='R'], data$TgtErr[data$SegmentLR=='L'])
+print(sprintf("RMS Errors (Left/Right): L = %f mm; R = %f mm (p = %f)", sqrt(mean(data$TgtErr[data$SegmentLR=='L']^2)), sqrt(mean(data$TgtErr[data$SegmentLR=='R']^2)), wtest$p.value))
+
+##
+## Targeting Errors in AP
+##
+
+wtest <- wilcox.test(data$TgtErr[data$SegmentAP=='A'], data$TgtErr[data$SegmentAP=='P'])
+print(sprintf("RMS Errors (Anterior/Posterior): A = %f mm; P = %f mm (p = %f)", sqrt(mean(data$TgtErr[data$SegmentAP=='A']^2)), sqrt(mean(data$TgtErr[data$SegmentAP=='P']^2)), wtest$p.value))
+
+##
+## Targeting Errors in AMB
+##
+wtest.am <- wilcox.test(data$TgtErr[data$SegmentAB=='A'], data$TgtErr[data$SegmentAB=='M'])
+wtest.mb <- wilcox.test(data$TgtErr[data$SegmentAB=='M'], data$TgtErr[data$SegmentAB=='B'])
+wtest.ab <- wilcox.test(data$TgtErr[data$SegmentAB=='A'], data$TgtErr[data$SegmentAB=='B'])
+print(sprintf("RMS Errors (Apex/Mid/Base: A = %f mm; M = %f mm; B = %f mm (p(AM) = %f; p(MB) = %f; p(AB) = %f)", sqrt(mean(data$TgtErr[data$SegmentAB=='A']^2)), sqrt(mean(data$TgtErr[data$SegmentAB=='M']^2)), sqrt(mean(data$TgtErr[data$SegmentAB=='B']^2)), wtest.am$p.value, wtest.mb$p.value, wtest.ab$p.value))
+
+#
+# Attempts vs Location
+                                        #
+averageAttempts <- targetNumAttempts / targetNumCores
+targetSegmentLR <- data$SegmentLR[data$First==TRUE]
+targetSegmentAP <- data$SegmentAP[data$First==TRUE]
+targetSegmentAB <- data$SegmentAB[data$First==TRUE]
+
+print(wilcox.test(averageAttempts[targetSegmentLR=='R'], averageAttempts[targetSegmentLR=='L']))
+print(wilcox.test(averageAttempts[targetSegmentAP=='A'], averageAttempts[targetSegmentAP=='P']))
+print(wilcox.test(averageAttempts[targetSegmentAB=='A'], averageAttempts[targetSegmentAB=='B']))
+
+print(sprintf("Average # of attempts (Left/Right): %f vs %f", mean(averageAttempts[targetSegmentLR=='R']), mean(averageAttempts[targetSegmentLR=='L'])))
+print(sprintf("Average # of attempts (Anterior/Posterior): %f vs %f", mean(averageAttempts[targetSegmentAP=='A']), mean(averageAttempts[targetSegmentAP=='P'])))
+print(sprintf("Average # of attempts (Apex/Mid/Base): %f vs %f vs %f", mean(averageAttempts[targetSegmentAB=='A']), mean(averageAttempts[targetSegmentAB=='M']), mean(averageAttempts[targetSegmentAB=='B'])))
 
 
 ##
@@ -199,7 +248,12 @@ dev.off()
 
 
 
-
+## Shift of the targets
+tgtDispRMS <- sqrt(mean(data$TgtDispR^2+data$TgtDispA^2+data$TgtDispS^2))
+print(sprintf('RMS Target Displacement: %f mm', tgtDispRMS))
+print(sprintf('Target Displacement Right-Left: %f +/- %f mm', mean(data$TgtDispR), sd(data$TgtDispR)))
+print(sprintf('Target Displacement Anterior-Posterior: %f +/- %f mm', mean(data$TgtDispA), sd(data$TgtDispA)))
+print(sprintf('Target Displacement Superior-Inferior: %f +/- %f mm', mean(data$TgtDispS), sd(data$TgtDispS)))
 
 
 

@@ -26,7 +26,7 @@ def main():
     resultFileName = "result-%04d-%02d-%02d-%02d-%02d-%02d.csv" % (lt.tm_year, lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec)
     resultFilePath = path + '/' + resultFileName
     resultFile = open(resultFilePath, 'a')
-    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core\n") ## CSV header
+    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
     
     # Initialize CurveMaker module
     slicer.util.selectModule('CurveMaker')
@@ -128,6 +128,18 @@ def main():
             slicer.mrmlScene.RemoveNode(targetsNode)
             continue
 
+        # Validate the target index
+        nTargets = targetsNode.GetNumberOfFiducials()
+        if target > nTargets:
+            print 'The target index exceeds the largest index (%d / %d).' % (target, nTargets)
+            slicer.mrmlScene.RemoveNode(transformNode)
+            slicer.mrmlScene.RemoveNode(targetsNode)
+            continue
+
+        # Get original target location
+        origTgt = [0.0, 0.0, 0.0]
+        targetsNode.GetNthFiducialPosition(target-1, origTgt)
+
         # Transform targets
         matrix = vtk.vtkMatrix4x4()
         transformNode.GetMatrixTransformToParent(matrix)
@@ -137,15 +149,11 @@ def main():
         slicer.util.saveNode(targetsNode, transformedTargetFilePath)
 
         # Get actual biopsy target
-        nTargets = targetsNode.GetNumberOfFiducials()
-        if target > nTargets:
-            print 'The target index exceeds the largest index (%d / %d).' % (target, nTargets)
-            slicer.mrmlScene.RemoveNode(transformNode)
-            slicer.mrmlScene.RemoveNode(targetsNode)
-            continue
-
         biopsyTgt = [0.0, 0.0, 0.0]
         targetsNode.GetNthFiducialPosition(target-1, biopsyTgt)
+
+        # Calculate the displacement of the target
+        tgtDisplacement = numpy.array(biopsyTgt)-numpy.array(origTgt)
         
         # Load trajectory
         trajectoryFilePath = '%s/Case%03d/Traj-%d.fcsv' % (path, case, image)
@@ -217,7 +225,8 @@ def main():
         resultFile.write("%.3f," % bevelAngle)
         resultFile.write("%s,%s,%s,%s," % (segment[0], segment[1], segment[2], segment[3]))
         resultFile.write("%.3f,%.3f," % (depth[0], depth[1]))
-        resultFile.write("%s\n" % core)
+        resultFile.write("%s," % core)
+        resultFile.write("%.3f,%.3f,%.3f\n" % (tgtDisplacement[0], tgtDisplacement[1], tgtDisplacement[2]))
                          
         cmlogic.SourceNode = None
         cmlogic.DestinationNode = None
