@@ -19,6 +19,83 @@ from slicer.ScriptedLoadableModule import *
 path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
 dataFile = 'RobotCase-Log.csv'
 
+
+
+# Fit a circle and return the intersection and radius
+#   (intersect, radius) = FitCircle(p1, p2, p3)
+#
+#   p1, p2, p3: 3-element vectors in numpy.array() format
+#
+def FitCircle(p1, p2, p3):
+
+    posErr = 0.00001;
+
+    # Compute the bisecting points between p1 and p2 (m1), and p2 and p3 (m2)
+    m1 = (p1+p2)/2.0
+    m2 = (p2+p3)/2.0
+    
+    # Compute the normal vectors along the perpendicular bisectors
+    v12 = (p2-p1)
+    v23 = (p3-p2)
+
+    norm12 = numpy.linalg.norm(v12)
+    norm23 = numpy.linalg.norm(v23)
+
+    if norm12 < posErr or norm23 < posErr:
+        return 0
+
+    v12 = v12 / norm12
+    v23 = v23 / norm23
+
+    # Vector perpendicular to the circle
+    n = numpy.cross(v12, v23)
+    norm_n = numpy.linalg.norm(n)
+
+    if norm_n < posErr:
+        return 0
+    n = n / norm_n
+    
+    n1 = numpy.cross(v12, n)
+    n2 = numpy.cross(v23, n)
+
+    norm_n1 = numpy.linalg.norm(n1)
+    norm_n2 = numpy.linalg.norm(n2)
+    if norm_n1 < posErr or norm_n2 < posErr:
+        return 0
+
+    n1 = n1 / norm_n1
+    n2 = n2 / norm_n2
+
+    # Compute the projection of m2 onto the perpendicular bisector of p1p2
+    h = m1 + numpy.inner((m2-m1),n1)*n1
+
+    # The intersecting point of the two perpendicular bisectors (= estimated
+    # center of fitted circle) is 'c' can be written as:
+    #
+    #    <c> = <m2> + a * <n2>
+    #
+    # where 'a' is a scalar value. Projection of 'c' on the m2h is 'h'
+    #
+    #    a * <n2> * (<h> - <m2>)/(|<h> - <m2>|) = |<h> - <m2>|
+    #    a = |<h> - <m2>|^2 / {<n2> * (<h> - <m2>)}
+    #
+
+    m2h = h-m2
+    nm2h = numpy.linalg.norm(m2h)
+
+    a = nm2h*nm2h / numpy.inner(n2, m2h)
+
+  
+    intersect = m2 + a * n2
+
+    print intersect
+    radius = (numpy.linalg.norm(p1-intersect)+numpy.linalg.norm(p2-intersect)+numpy.linalg.norm(p3-intersect)) / 3.0
+
+    #return (intersect, radius)
+    return radius
+
+
+
 def main():
 
     # Open result file
@@ -26,7 +103,7 @@ def main():
     resultFileName = "result-%04d-%02d-%02d-%02d-%02d-%02d.csv" % (lt.tm_year, lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec)
     resultFilePath = path + '/' + resultFileName
     resultFile = open(resultFilePath, 'a')
-    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
+    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
     
     # Initialize CurveMaker module
     slicer.util.selectModule('CurveMaker')
@@ -186,6 +263,25 @@ def main():
         biopsyTgtOffset = -biopsyTgtOffset
         print 'BIOPSY ERROR: %.3f, (%.3f, %.3f, %.3f)' % (biopsyTgtDist, biopsyTgtOffset[0], biopsyTgtOffset[1], biopsyTgtOffset[2])
 
+        entryPointOffset = numpy.array([0.0, 0.0, 0.0])
+        nFid = trajectoryNode.GetNumberOfFiducials()
+        if  nFid > 0:
+            posStart = [0.0, 0.0, 0.0]
+            posMid   = [0.0, 0.0, 0.0]
+            posEnd   = [0.0, 0.0, 0.0]
+            trajectoryNode.GetNthFiducialPosition(nFid-1,posStart)
+            trajectoryNode.GetNthFiducialPosition(nFid/2,posMid)
+            trajectoryNode.GetNthFiducialPosition(0,posEnd)
+            # Error at the skin entry point, assuming the robot adjusts the trajectory to the main field. (If not, needle orientation
+            # has to be obtained from the RobotCase-Log.csv)
+            entryPointOffset = numpy.array([posStart[0], posStart[1], 0.0]) - numpy.array([robotTgt[0], robotTgt[1], 0.0])
+            #trajectoryNode.GetNthFiducialPosition(nOfControlPoints-1,posEnd)
+            #posEnd = [0.0, 0.0, 0.0]
+
+            # Compute curveture
+            radius = FitCircle(numpy.array(posStart), numpy.array(posMid), numpy.array(posEnd))
+
+        
         # Convert bevel direction to angle
         bevelAngle = bevel*30.0
 
@@ -223,6 +319,8 @@ def main():
         resultFile.write("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f," % (robotTgtDist, robotTgtOffset[0], robotTgtOffset[1], robotTgtOffset[2], robotErrorAngle, deltaRobotErrorAngle))
         resultFile.write("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f," % (biopsyTgtDist, biopsyTgtOffset[0], biopsyTgtOffset[1], biopsyTgtOffset[2], biopsyErrorAngle, deltaBiopsyErrorAngle))
         resultFile.write("%.3f," % bevelAngle)
+        resultFile.write("%.3f,%.3f,%.3f," % (entryPointOffset[0], entryPointOffset[1], entryPointOffset[2]))
+        resultFile.write("%.3f," % radius)
         resultFile.write("%s,%s,%s,%s," % (segment[0], segment[1], segment[2], segment[3]))
         resultFile.write("%.3f,%.3f," % (depth[0], depth[1]))
         resultFile.write("%s," % core)
