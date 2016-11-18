@@ -1,6 +1,8 @@
-path = "/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/"
+#path = "/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/"
+path = "/Users/junichi/Projects/BRP/BRPRobotCases/Scene"
 #dataFile = "result-2015-09-28-23-34-36.csv"
-dataFile = "result-2015-10-28-09-09-31.csv"
+#dataFile = "result-2015-10-28-09-09-31.csv"
+dataFile = "result-2016-09-28-11-49-46.csv"
 data = read.csv(sprintf("%s/%s", path, dataFile))
 
 # Process
@@ -124,12 +126,12 @@ print(sprintf("RMS Biopsy Error (sampled)         : %.3f (mm)", sqrt(mean(data$B
 ##
 ## Distance vs Targeting Error
 ##
-R = cor( data$DepthEnd, data$TgtErr )
-pdf(sprintf("%s/Result-Distance-TgtError.pdf", path))
-reg1 <- lm(data$DepthEnd~data$TgtErr)
-plot(data$DepthEnd, data$TgtErr, main=sprintf("Needle Insertion Depth vs Targeting Error (r=%f)", R), xlab="Insertion Depth (mm)", ylab="Targeting Error (mm)")
-abline(reg1)
-dev.off()
+#R = cor( data$DepthEnd, data$TgtErr )
+#pdf(sprintf("%s/Result-Distance-TgtError.pdf", path))
+#reg1 <- lm(data$DepthEnd~data$TgtErr)
+#plot(data$DepthEnd, data$TgtErr, main=sprintf("Needle Insertion Depth vs Targeting Error (r=%f)", R), xlab="Insertion Depth (mm)", ylab="Targeting Error (mm)")
+#abline(reg1)
+#dev.off()
 
 
 ##

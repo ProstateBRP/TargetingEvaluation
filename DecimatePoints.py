@@ -11,7 +11,8 @@ from __main__ import vtk, qt, ctk, slicer
 
 path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
 dataFile = 'RobotCase-Log.csv'
-pointInterval = 10.0 # distance between points in mm
+pointInterval = 5.0 # distance between points in mm
+prefix = 'Decimated-5-'
 
 def main():
 
@@ -89,7 +90,7 @@ def main():
         # Create output trajectory
         outputFiducialNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLMarkupsFiducialNode")
         slicer.mrmlScene.AddNode(outputFiducialNode)
-        outputFiducialNode.SetName('DecimatedTraj-%d.fcsv')
+        outputFiducialNode.SetName('%sTraj-%d' % (prefix, image))
 
         nFid = trajectoryNode.GetNumberOfFiducials()
         dist = 0.0
@@ -114,7 +115,7 @@ def main():
             nOutput = outputFiducialNode.GetNumberOfFiducials()
             outputFiducialNode.SetNthFiducialPositionFromArray(nOutput-1, pos)
 
-        slicer.util.saveNode(outputFiducialNode, '%s/Case%03d/DecimatedTraj-%d.fcsv' % (path, case, image))
+        slicer.util.saveNode(outputFiducialNode, '%s/Case%03d/%sTraj-%d.fcsv' % (path, case, prefix, image))
         slicer.mrmlScene.RemoveNode(trajectoryNode)
         slicer.mrmlScene.RemoveNode(outputFiducialNode)
 

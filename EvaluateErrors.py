@@ -17,6 +17,7 @@ from slicer.ScriptedLoadableModule import *
 # This script requires CurveMaker module to measure the minimum distance between points and curves.
 
 path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
+#path = '/home/develop/Projects/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
 dataFile = 'RobotCase-Log.csv'
 
 
@@ -103,7 +104,8 @@ def main():
     resultFileName = "result-%04d-%02d-%02d-%02d-%02d-%02d.csv" % (lt.tm_year, lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec)
     resultFilePath = path + '/' + resultFileName
     resultFile = open(resultFilePath, 'a')
-    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
+    #resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
+    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
     
     # Initialize CurveMaker module
     slicer.util.selectModule('CurveMaker')
@@ -123,8 +125,8 @@ def main():
     segmentZoneIndex = -1  # CG, TZ, or PZ
     segmentABIndex = -1    # Apex, Base, or Mid gland
     segmentAPIndex = -1    # Anterior - Posterior
-    depthStartIndex = -1
-    depthEndIndex = -1
+    #depthStartIndex = -1
+    #depthEndIndex = -1
     coreIndex = -1
     
     caseData = []
@@ -145,8 +147,8 @@ def main():
                 segmentZoneIndex = row.index('Zone')
                 segmentABIndex = row.index('AB')
                 segmentAPIndex = row.index('AP')
-                depthStartIndex = row.index('DepthStart')
-                depthEndIndex = row.index('DepthEnd')
+                #depthStartIndex = row.index('DepthStart')
+                #depthEndIndex = row.index('DepthEnd')
                 coreIndex = row.index('Core')
                 
             else:
@@ -161,18 +163,21 @@ def main():
                 segmentZone = row[segmentZoneIndex]
                 segmentAB = row[segmentABIndex]
                 segmentAP = row[segmentAPIndex]
-                depthStart = float(row[depthStartIndex])
-                depthEnd = float(row[depthEndIndex])
+                #depthStart = float(row[depthStartIndex])
+                #depthEnd = float(row[depthEndIndex])
                 core = row[coreIndex]
 
-                caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], [depthStart, depthEnd], core))
+                #caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], [depthStart, depthEnd], core))
+                caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], core))
 
     prevCase = -1
     prevTarget = -1
     prevRobotTgtOffset = numpy.array([0.0, 0.0, 0.0])
     prevBiopsyTgtOffset = numpy.array([0.0, 0.0, 0.0])
+    prevTransformIndex = None
     
-    for (case, target, image, robotTgt, bevel, segment, depth, core) in caseData:
+    #for (case, target, image, robotTgt, bevel, segment, depth, core) in caseData:
+    for (case, target, image, robotTgt, bevel, segment, core) in caseData:
 
         newTarget = False
         if (case != prevCase) or (target != prevTarget):
@@ -193,18 +198,27 @@ def main():
         # Load transform
         transformFilePath = '%s/Case%03d/T-%02d.h5' % (path, case, image)
         transformNode = None
+        transformIndexUsed = image
         if os.path.isfile(transformFilePath):
             (r, transformNode) = slicer.util.loadTransform(transformFilePath, True)
         else:
             # Offset for image index. See the comment above.
             transformFilePath = '%s/Case%03d/T-%02d.h5' % (path, case, image-1)
             (r, transformNode) = slicer.util.loadTransform(transformFilePath, True)
+            transformIndexUsed = image-1
             
         if not transformNode:
-            print 'Could not find transform file.'
+            print 'Could not find transform file -- Previous one is used.'
             slicer.mrmlScene.RemoveNode(targetsNode)
-            continue
-
+            if prevTransformIndex:
+                transformFilePath = '%s/Case%03d/T-%02d.h5' % (path, case, prevTransformIndex)
+                (r, transformNode) = slicer.util.loadTransform(transformFilePath, True)
+                transformIndexUsed = prevTransformIndex
+            else:
+                continue
+        
+        prevTransformNodeIndex = transformIndexUsed
+        
         # Validate the target index
         nTargets = targetsNode.GetNumberOfFiducials()
         if target > nTargets:
@@ -322,7 +336,7 @@ def main():
         resultFile.write("%.3f,%.3f,%.3f," % (entryPointOffset[0], entryPointOffset[1], entryPointOffset[2]))
         resultFile.write("%.3f," % radius)
         resultFile.write("%s,%s,%s,%s," % (segment[0], segment[1], segment[2], segment[3]))
-        resultFile.write("%.3f,%.3f," % (depth[0], depth[1]))
+        #resultFile.write("%.3f,%.3f," % (depth[0], depth[1]))
         resultFile.write("%s," % core)
         resultFile.write("%.3f,%.3f,%.3f\n" % (tgtDisplacement[0], tgtDisplacement[1], tgtDisplacement[2]))
                          
