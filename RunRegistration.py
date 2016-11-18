@@ -6,10 +6,11 @@ import math
 import tempfile
 import time
 import numpy
+import shutil
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 
-path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case257'
+path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case448'
 
 def main():
     registrationParameters = {}
@@ -62,14 +63,14 @@ def main():
     planningLabelNode = None
     
     # Load planning image
-    for index in range(1, 50):
+    for index in range(1, 100):
         planningImageFileName ='%s/planning-%02d.nrrd' % (path, index)
         planningLabelFileName ='%s/planning-%02d-label.nrrd' % (path, index)
         if os.path.isfile(planningImageFileName) and os.path.isfile(planningLabelFileName):
             (r, planningImageNode) = slicer.util.loadVolume(planningImageFileName, {}, True)
             (r, planningLabelNode) = slicer.util.loadVolume(planningLabelFileName, {}, True)
             break
-    
+
     if not (planningImageNode and planningLabelNode):
         return
     
@@ -79,7 +80,7 @@ def main():
     firstNeedleLabelNode = None
     
     # Load first needle image
-    for index in range(sindex, 50):
+    for index in range(sindex, 100):
     
         firstNeedleImageFileName ='%s/needle-t-%02d.nrrd' % (path, index)
         firstNeedleLabelFileName ='%s/needle-t-%02d-label.nrrd' % (path, index)
@@ -95,31 +96,47 @@ def main():
     
     if not firstNeedleLabelNode:
         return
-    
-    # Register the planning image to the first needle image
-    firstNeedleImageTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
-    firstNeedleImageTransformName = 'T-%02d' % index
-    slicer.mrmlScene.AddNode(firstNeedleImageTransform)
-    firstNeedleImageTransform.SetName(firstNeedleImageTransformName)
-    
+
+
+    firstNeedleImageTransform = None
     registrationCLI = slicer.modules.brainsfit
-    registrationParameters['fixedVolume'] = firstNeedleImageNode.GetID()
-    registrationParameters['movingVolume'] = planningImageNode.GetID()
-    registrationParameters['linearTransform'] = firstNeedleImageTransform.GetID()
-    registrationParameters['initialTransform'] = ''
-    registrationParameters['initializeTransformMode'] = 'useCenterOfROIAlign'
-    registrationParameters['maskProcessingMode'] = 'ROI'
-    registrationParameters['fixedBinaryVolume'] = firstNeedleLabelNode.GetID()
-    registrationParameters['movingBinaryVolume'] = planningLabelNode.GetID()
-    slicer.cli.run(registrationCLI, None, registrationParameters, True)     
+
+    manualTransformFileName = '%s/T-%02d-init-manual.h5' % (path, index)
+    if os.path.isfile(manualTransformFileName):
+        print 'Series %02d: Manual Transform' % index
+        dst = '%s/T-%02d.h5' % (path, index)
+        shutil.copyfile(manualTransformFileName, dst)
+        (r, firstNeedleImageTransform) = slicer.util.loadTransform(manualTransformFileName, True)
+        
+    else:
+        # Register the planning image to the first needle image
+        firstNeedleImageTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
+        firstNeedleImageTransformName = 'T-%02d' % index
+        slicer.mrmlScene.AddNode(firstNeedleImageTransform)
+        firstNeedleImageTransform.SetName(firstNeedleImageTransformName)
     
-    slicer.util.saveNode(firstNeedleImageTransform, path+'/'+firstNeedleImageTransformName+'.h5')
+        registrationParameters['fixedVolume'] = firstNeedleImageNode.GetID()
+        registrationParameters['movingVolume'] = planningImageNode.GetID()
+        registrationParameters['linearTransform'] = firstNeedleImageTransform.GetID()
+        registrationParameters['initialTransform'] = ''
+        registrationParameters['initializeTransformMode'] = 'useCenterOfROIAlign'
+        registrationParameters['maskProcessingMode'] = 'ROI'
+        registrationParameters['fixedBinaryVolume'] = firstNeedleLabelNode.GetID()
+        registrationParameters['movingBinaryVolume'] = planningLabelNode.GetID()
+        slicer.cli.run(registrationCLI, None, registrationParameters, True)     
+        slicer.util.saveNode(firstNeedleImageTransform, path+'/'+firstNeedleImageTransformName+'.h5')
+
+    if not firstNeedleImageTransform:
+        return
+    
     firstTransformMatrix = vtk.vtkMatrix4x4()
     firstNeedleImageTransform.GetMatrixTransformToParent(firstTransformMatrix)
 
     sindex = index+1
-    for index in range(sindex, 50):
+    for index in range(sindex, 100):
 
+        print index
+        
         # Load current needle image
         needleImageFileName ='%s/needle-t-%02d.nrrd' % (path, index)
         needleLabelFileName ='%s/needle-t-%02d-label.nrrd' % (path, index)
@@ -135,6 +152,14 @@ def main():
         
         print 'Processing series %d' % index
 
+        manualTransformFileName = '%s/T-%02d-init-manual.h5' % (path, index)
+        if os.path.isfile(manualTransformFileName):
+            print 'Series %02d: Manual Transform' % index
+            dst = '%s/T-%02d.h5' % (path, index)
+            shutil.copyfile(manualTransformFileName, dst)
+            slicer.mrmlScene.RemoveNode(needleImageNode)
+            continue
+        
         # Check if there is a label data
         if os.path.isfile(needleLabelFileName):
             (r, needleLabelNode) = slicer.util.loadVolume(needleLabelFileName, {}, True)
@@ -149,7 +174,7 @@ def main():
                 (r, initTransform) = slicer.util.loadTransform(adjustedInitTransformFileName, True)
 
             if not initTransform:
-                print 'Series %02d: Finding intiial transform.' % index
+                print 'Series %02d: Finding initial transform.' % index
                 initTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")            
                 initTransformName = 'T-%02d-init' % index
                 slicer.mrmlScene.AddNode(initTransform)
@@ -186,8 +211,8 @@ def main():
                 #slicer.util.saveNode(needleLabelNode, path+'/'+needleLabelName+'.nrrd')
 
         # Registration
-        needleImageTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
         needleImageTransformName = 'T-%02d' % index
+        needleImageTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
         slicer.mrmlScene.AddNode(needleImageTransform)
         needleImageTransform.SetName(needleImageTransformName)
     
