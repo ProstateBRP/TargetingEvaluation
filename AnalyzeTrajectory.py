@@ -15,11 +15,10 @@ def main():
     ProcessCase(path):
 
 # Create surface models from a label map and return the node ID of model hierarhcy
-def CreateModels(labelMapNode):
+def CreateModels(labelMapNode, modelHierarchyNode):
 
     modelMakerCLI = slicer.modules.modelmaker
     # tf = tempfile.NamedTemporaryFile(prefix='Slicer/Models-', suffix='.mrml')
-    modelHierarchyNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLModelHierarchyNode")
 
     modelMakerParameters = {}
     modelMakerParameters['color'] = 'vtkMRMLColorTableNodeFileGenericAnatomyColors.txt'
@@ -39,7 +38,23 @@ def CreateModels(labelMapNode):
 
     slicer.cli.run(resampleCLI, None, resampleParameters, True)
 
-    return modelHierarchyNode.GetID()
+
+def TrasformModelHierarchy(modelHierarchyNode, transformNode):
+    if not transformNode:
+        return False
+
+    # modelLabelNode.SetAndObserveTransformNodeID(transformNode.GetID())
+    # slicer.vtkSlicerTransformLogic.hardenTransform(modelLabelNode)
+    collection = vtk.vtkCollection()
+    modelHierarchyNode.GetAssociatedNode(collection)
+    if collection:
+        nModels = collection.GetNumberOfItems()
+        for i in range(nModels):
+            model = collection.GetItemAsObject(i)
+            model.SetAndObserveTransformNodeID(transformNode.GetID())
+            slicer.vtkSlicerTransformLogic.hardenTransform(model)
+    return True
+
 
 def RigidRegistration(fromImageNode, toImageNode, transformNode):
     registrationParameters = {}
@@ -131,8 +146,8 @@ def ProcessCase(path, reRegistration=False):
 
     # Create 3D models
     print "Creating 3D surface models for %s " % modelLabelFileName
-    modelHierarchyNodeID = CreateModels(modelLabelNode)
-    modelHierarchyNode = slicer.mrmlScene.GetNodeByID(modelHierarchyNodeID)
+    modelHierarchyNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLModelHierarchyNode")
+    CreateModels(modelLabelNode, modelHierarchyNode)
 
     baseIndex = index
     sindex = index-1
@@ -182,16 +197,11 @@ def ProcessCase(path, reRegistration=False):
             slicer.util.saveNode(transform, path+'/'+transformName+'.h5')
 
         # Once the transform is obtained, apply it to the models
-        if transformNode:
-            # modelLabelNode.SetAndObserveTransformNodeID(transformNode.GetID())
-            # slicer.vtkSlicerTransformLogic.hardenTransform(modelLabelNode)
-            collection = vtk.vtkCollection()
-            modelHierarchyNode.GetAssociatedNode(collection)
-            if collection:
-                nModels = collection.GetNumberOfItems()
-                for i in range(nModels):
-                    model = collection.GetItemAsObject(i)
+        TransformModelHierarchy(modelHierarchyNode, transformNode)
 
+        #### Load fiducial
+        # pcaLogic = PathCollisionAnalysis.PathCollisionAnalysisLogic()
+        # [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject] = pcaLogic.CheckIntersections(modelHierarchyNode, FiducialSelector.currentNode())
 
         slicer.mrmlScene.RemoveNode(needleImageNode)
         slicer.mrmlScene.RemoveNode(needleLabelNode)
