@@ -261,7 +261,7 @@ def ProcessCase(directory, caseIndex, reRegistration=False, outFileName=None):
             nEntry = 2
             lb = ''
             if len(angles) < 2:
-                lb = "%f, --, %f, --, --, --, %f, %f, %f" % (length, angles[0], normals[0][0], normals[0][1], normals[0][2])
+                lb = "%f, %f, %f, %f, %f, --, --, --" % (length, angles[0], normals[0][0], normals[0][1], normals[0][2])
             else:
                 lb = "%f, %f, %f, %f, %f, %f, %f, %f, %f" % (length, angles[1], angles[0], normals[1][0], normals[1][1], normals[1][2], normals[0][0], normals[0][1], normals[0][2])
 
