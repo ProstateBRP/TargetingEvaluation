@@ -239,7 +239,7 @@ def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIn
         i = 0
         if len(entryAngles[k]) >= 2:
             i = 1
-            
+
         angle = entryAngles[k][i]
         normal = normalVectors[k][i]
         length = totalLengthInObject[k]
@@ -248,7 +248,9 @@ def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIn
         l = objectNameDict[objectNames[k]]
         lenTable[l] = length
         entAngTable[l] = angle
-        entDirTable[l] = math.atan2(normal[0], normal[1]) * 180.0 / math.pi # NOTE: It's not atan(y, x) because the angle is 0 when (x, y) = (0, 1)
+        # NOTE: It's not atan(y, x) because the angle is 0 when (x, y) = (0, 1).
+        # Also note that the sign for x is negative, because it goes negative, when rotated clockwise from 0 degree.
+        entDirTable[l] = math.atan2(-normal[0], normal[1]) * 180.0 / math.pi
 
     # Transform the models back to the original location
     transformNode.Inverse()
