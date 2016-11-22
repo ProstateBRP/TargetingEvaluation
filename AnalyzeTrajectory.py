@@ -154,6 +154,20 @@ def FindNextIndex(startIndex, endIndex, path, prefix, postfix):
 
 
 def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIndex, reRegistration=False):
+
+    # Object name dictionary:
+    objectNameDict = {
+    'Model_2_2': 1, # Prostate, 2
+    'Model_3_3' : 2, # Pelvic Diaphragm, 3
+    'Model_4_4' : 3, # Blubospongiosus m., 4
+    'Model_16_16': 4, # Bulb of the Penus / Corpus Spongiosum, 16
+    'Model_5_5' : 5, # Ischiocavernosus m., 5
+    'Model_6_6' : 6, # Crus of the Penis / Corpus Cavernosum, 6
+    'Model_13_13' : 7, # Transverse Perineal m., 13
+    'Model_10_10' : 8, # Obturator internus m., 10
+    'Model_8_8': 9, # Rectum, 8
+    }
+
     print 'Processing series %d' % seriesIndex
 
     # Load current needle image
@@ -216,18 +230,25 @@ def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIn
     nObjects = len(objectIDs)
     resultString = ""
 
-    for k in range(nObjects):
-        angles = entryAngles[k]
-        normals = normalVectors[k]
-        length = totalLengthInObject[k]
-        nEntry = 2
-        lb = ""
-        if len(angles) < 2:
-            lb = "%f, %f, --, %f, %f, %f, --, --, --" % (length, angles[0], normals[0][0], normals[0][1], normals[0][2])
-        else:
-            lb = "%f, %f, %f, %f, %f, %f, %f, %f, %f" % (length, angles[1], angles[0], normals[1][0], normals[1][1], normals[1][2], normals[0][0], normals[0][1], normals[0][2])
+    nObjectsInDic = len(objectNameDict)
+    lenTable = [0.0] * nObjectsInDic
+    entAngTable = [0.0] * nObjectsInDic
+    entDirTable = [0.0] * nObjectsInDic
 
-        resultString = resultString + "%d, %d, %s, %s\n" % (caseIndex, seriesIndex, objectNames[k], lb)
+    for k in range(nObjects):
+        i = 0
+        if len(entryAngles[k]) >= 2:
+            i = 1
+            
+        angle = entryAngles[k][i]
+        normal = normalVectors[k][i]
+        length = totalLengthInObject[k]
+
+        # Look up table index
+        l = objectNameDict[objectNames[k]]
+        lenTable[l] = length
+        entAngTable[l] = angle
+        entDirTable[l] = math.atan2(normal[0], normal[1]) * 180.0 / math.pi # NOTE: It's not atan(y, x) because the angle is 0 when (x, y) = (0, 1)
 
     # Transform the models back to the original location
     transformNode.Inverse()
@@ -240,6 +261,12 @@ def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIn
     slicer.mrmlScene.RemoveNode(trajectoryNode)
     slicer.mrmlScene.RemoveNode(needleImageNode)
     slicer.mrmlScene.RemoveNode(transformNode)
+
+    resultString = "%d, %d" % (caseIndex, seriesIndex)
+    for i in range(0, nObjectsInDic):
+        resultString = resultString + ", %f, %f, %f" % (lenTable[i], entAngTable[i], entDirTable[i])
+
+    resultString = resultString + "\n"
 
     return resultString
 
@@ -273,28 +300,10 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
 
     # Print header
     # resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
-    resultFile.write("Case, Traj, ObjName, ")
+    resultFile.write("Case, Traj, ")
     resultFile.write("Len_0, EntAng_0, EntDir_0, Len_1, EntAng_1, EntDir_1, Len_2, EntAng_2, EntDir_2, ")
     resultFile.write("Len_3, EntAng_3, EntDir_3, Len_4, EntAng_4, EntDir_4, Len_5, EntAng_5, EntDir_5, ")
-    resultFile.write("Len_6, EntAng_6, EntDir_6, Len_7, EntAng_7, EntDir_7, Len_8, EntAng_8, EntDir_8, ")
-    resultFile.write("Len_9, EntAng_9, EntDir_9\n") ## CSV header
-
-    # Object name dictionary:
-    objectNames = {
-    'Model_2_2': 1, # Prostate, 2
-    'Model_3_3' : 2, # Pelvic Diaphragm, 3
-    'Model_4_4' : 3, # Blubospongiosus m., 4
-    'Model_16_16': 4, # Bulb of the Penus / Corpus Spongiosum, 16
-    'Model_5_5' : 5, # Ischiocavernosus m., 5
-    'Model_6_6' : 6, # Crus of the Penis / Corpus Cavernosum, 6
-    'Model_13_13' : 7, # Transverse Perineal m., 13
-    'Model_10_10' : 8, # Obturator internus m., 10
-    'Model_8_8': 9, # Rectum, 8
-    }
-
-    # lenTable = [0.0] * len[objectNames]
-    # entAngTable = [0.0] * len[objectNames]
-    # entDirTable = [0.0] * len[objectNames]
+    resultFile.write("Len_6, EntAng_6, EntDir_6, Len_7, EntAng_7, EntDir_7, Len_8, EntAng_8, EntDir_8\n ")
 
     MAX_INDEX = 100
 
@@ -346,7 +355,7 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
 
         if index < 0:
             print "Could not find needle confirmation image in the range anymore."
-            return
+            break
 
         resultString = ProcessSeries(path, caseIndex, modelHierarchyNode, baseIndex, index, reRegistration)
 
