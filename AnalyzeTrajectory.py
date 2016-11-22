@@ -1,3 +1,4 @@
+import sys
 import os
 import os.path
 import unittest
@@ -10,8 +11,6 @@ import shutil
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 import PathCollisionAnalysis
-
-
 
 def main():
     path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case448'
@@ -137,48 +136,201 @@ def RigidRegistration(fromImageNode, toImageNode, transformNode):
     # slicer.cli.run(resampleCLI, None, resampleParameters, True)
     # #slicer.util.saveNode(needleLabelNode, path+'/'+needleLabelName+'.nrrd')
 
+def GenerateFileName(prefix, postfix):
 
-def ProcessCase(directory, caseIndex, reRegistration=False, outFileName=None):
+    lt = time.localtime()
+    fileName = "%s-%04d-%02d-%02d-%02d-%02d-%02d%s" % (prefix, lt.tm_year, lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, postfix)
+    return fileName
+
+def FindNextIndex(startIndex, endIndex, path, prefix, postfix):
+
+    for index in range(startIndex, endIndex+1):
+        modelImageFileName ='%s/%s%02d%s' % (path, prefix, index, postfix)
+        if os.path.isfile(modelImageFileName):
+            return index
+
+    # Could not find the file in the index range
+    return -1
+
+
+def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIndex, reRegistration=False):
+    print 'Processing series %d' % seriesIndex
+
+    # Load current needle image
+    needleImageFileName = '%s/needle-v-%02d.nrrd' % (path, seriesIndex)
+    needleImageNode = None
+
+    (r, needleImageNode) = slicer.util.loadVolume(needleImageFileName, {}, True)
+    if not needleImageNode:
+        print 'Could not load needle confirmation image: %s' % needleImageFileName
+        return None
+
+    # Load the corresponding trajectory data
+    trajectoryFilePath = '%s/Traj-%d.fcsv' % (path, seriesIndex)
+    trajectoryNode = None
+    if os.path.isfile(trajectoryFilePath):
+        (r, trajectoryNode) = slicer.util.loadMarkupsFiducialList(trajectoryFilePath, True)
+
+    if not trajectoryNode:
+        print 'Could not find trajectory file: %s' % trajectoryFilePath
+        slicer.mrmlScene.RemoveNode(needleImageNode)
+        return None
+
+    # Any manual transform?
+    manualTransformFileName = '%s/T-%02d-to-%02d-manual.h5' % (path, baseSeriesIndex, seriesIndex)
+    transformNode = None
+    if os.path.isfile(manualTransformFileName):
+        print 'Series %02d: Manual transform has been found.' % seriesIndex
+        (r, transformNode) = slicer.util.loadTransform(manualTransformFileName, True)
+
+    transformName = 'T-%02d-to-%02d' % (baseSeriesIndex, seriesIndex)
+    transformFileName = '%s/%s.h5' % (path, transformName)
+
+    # If 're-registration' option is ON, any existing transform?
+    if (not reRegistration) and os.path.isfile(transformFileName):
+        print 'Series %02d: Existing transform has been found.' % seriesIndex
+        (r, transformNode) = slicer.util.loadTransform(transformFileName, True)
+
+    # No manual / existing transform
+    if not transformNode:
+        print 'Series %02d: Finding initial transform.' % seriesIndex
+        transformNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
+        slicer.mrmlScene.AddNode(transformNode)
+        transformNode.SetName(transformName)
+
+        RigidRegistration(modelImageNode, needleImageNode, transformNode)
+
+        # Create initialization transform
+        #transform.ApplyTransformMatrix(firstTransformMatrix)
+        slicer.util.saveNode(transformNode, path+'/'+transformName+'.h5')
+
+    # Once the transform is obtained, apply it to the models
+    TransformModelHierarchy(modelHierarchyNode, transformNode)
+
+    # Path Collision Analysis module
+    pcaLogic = PathCollisionAnalysis.PathCollisionAnalysisLogic()
+    [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject] = pcaLogic.CheckIntersections(modelHierarchyNode, trajectoryNode)
+
+    # Asume that the trajectory data traces the path from the tip to the base.
+    # The first entry point in the output represents the needle's entry point into the object.
+    nObjects = len(objectIDs)
+    resultString = ""
+
+    for k in range(nObjects):
+        angles = entryAngles[k]
+        normals = normalVectors[k]
+        length = totalLengthInObject[k]
+        nEntry = 2
+        lb = ""
+        if len(angles) < 2:
+            lb = "%f, %f, --, %f, %f, %f, --, --, --" % (length, angles[0], normals[0][0], normals[0][1], normals[0][2])
+        else:
+            lb = "%f, %f, %f, %f, %f, %f, %f, %f, %f" % (length, angles[1], angles[0], normals[1][0], normals[1][1], normals[1][2], normals[0][0], normals[0][1], normals[0][2])
+
+        resultString = resultString + "%d, %d, %s, %s\n" % (caseIndex, seriesIndex, objectNames[k], lb)
+
+    # Transform the models back to the original location
+    transformNode.Inverse()
+    TransformModelHierarchy(modelHierarchyNode, transformNode)
+
+    #### Load fiducial
+    # pcaLogic = PathCollisionAnalysis.PathCollisionAnalysisLogic()
+    # [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject] = pcaLogic.CheckIntersections(modelHierarchyNode, FiducialSelector.currentNode())
+
+    slicer.mrmlScene.RemoveNode(trajectoryNode)
+    slicer.mrmlScene.RemoveNode(needleImageNode)
+    slicer.mrmlScene.RemoveNode(transformNode)
+
+    return resultString
+
+
+def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
+    # This function will check the intersections between the given needle trajectory and anatomical structures.
+    # The needle trajectory is given as a fiducial markers, whereas the antomical structures are given as a label map.
+    # The fuction finds intersecting objects, and compute
+    #   - Trajectory length within the objects
+    #   - Entry angle defined by the angle between the normal of the object's surface at the entry point
+    #   - Entry direction defined as the angle from the 12 o'clock direction and the projectino of normal vector on the axial plane.
+    # The entry direction represents
+
     # Find base image (for anatomy segmentation)
     index = 0
     modelImageNode = None
     modelLabelNode = None
 
-    path = "%s/Case%03d" % (directory, caseIndex)
+    path = "%s/Case%03d" % (path, caseIndex)
     resultFile = None
 
     # Generate output file name, if not specified.
     if not outFileName:
         # Open result file
-        lt = time.localtime()
-        resultFileName = "TrajAnalysis-%04d-%02d-%02d-%02d-%02d-%02d.csv" % (lt.tm_year, lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec)
+        # lt = time.localtime()
+        # resultFileName = "TrajAnalysis-%04d-%02d-%02d-%02d-%02d-%02d.csv" % (lt.tm_year, lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec)
+        resultFileName = GenerateFileName('TrajAnalysis', '.csv')
         resultFilePath = path + '/' + resultFileName
 
     resultFile = open(resultFilePath, 'a')
-    #resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
-    resultFile.write("Case, Traj, ObjName, Length, EntAng1, EntAng2, Norm1X, Norm1Y, Norm1Z, Norm2X, Norm2Y, Norm2Z\n") ## CSV header
+
+    # Print header
+    # resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
+    resultFile.write("Case, Traj, ObjName, ")
+    resultFile.write("Len_0, EntAng_0, EntDir_0, Len_1, EntAng_1, EntDir_1, Len_2, EntAng_2, EntDir_2, ")
+    resultFile.write("Len_3, EntAng_3, EntDir_3, Len_4, EntAng_4, EntDir_4, Len_5, EntAng_5, EntDir_5, ")
+    resultFile.write("Len_6, EntAng_6, EntDir_6, Len_7, EntAng_7, EntDir_7, Len_8, EntAng_8, EntDir_8, ")
+    resultFile.write("Len_9, EntAng_9, EntDir_9\n") ## CSV header
+
+    # Object name dictionary:
+    objectNames = {
+    'Model_2_2': 1, # Prostate, 2
+    'Model_3_3' : 2, # Pelvic Diaphragm, 3
+    'Model_4_4' : 3, # Blubospongiosus m., 4
+    'Model_16_16': 4, # Bulb of the Penus / Corpus Spongiosum, 16
+    'Model_5_5' : 5, # Ischiocavernosus m., 5
+    'Model_6_6' : 6, # Crus of the Penis / Corpus Cavernosum, 6
+    'Model_13_13' : 7, # Transverse Perineal m., 13
+    'Model_10_10' : 8, # Obturator internus m., 10
+    'Model_8_8': 9, # Rectum, 8
+    }
+
+    # lenTable = [0.0] * len[objectNames]
+    # entAngTable = [0.0] * len[objectNames]
+    # entDirTable = [0.0] * len[objectNames]
+
+    MAX_INDEX = 100
 
     # Load model image
-    for index in range(1, 100):
-        modelImageFileName ='%s/needle-v-%02d.nrrd' % (path, index)
-        modelLabelFileName ='%s/needle-v-%02d-anatomy-label.nrrd' % (path, index)
-        if os.path.isfile(modelImageFileName) and os.path.isfile(modelLabelFileName):
-            (r, modelImageNode) = slicer.util.loadVolume(modelImageFileName, {}, True)
-            (r, modelLabelNode) = slicer.util.loadLabelVolume(modelLabelFileName, {}, True)
-            break
+    # for index in range(1, MAX_INDEX+1):
+    #     modelImageFileName ='%s/needle-v-%02d.nrrd' % (path, index)
+    #     modelLabelFileName ='%s/needle-v-%02d-anatomy-label.nrrd' % (path, index)
+    #     if os.path.isfile(modelImageFileName) and os.path.isfile(modelLabelFileName):
+    #         (r, modelImageNode) = slicer.util.loadVolume(modelImageFileName, {}, True)
+    #         (r, modelLabelNode) = slicer.util.loadLabelVolume(modelLabelFileName, {}, True)
+    #         break
+
+    index = FindNextIndex(1, MAX_INDEX, path, 'needle-v-', '-anatomy-label.nrrd')
+
+    if index < 0:
+        print "Could not find baseline image in the index range."
+        return
+
+    modelImageFileName ='%s/needle-v-%02d.nrrd' % (path, index)
+    modelLabelFileName ='%s/needle-v-%02d-anatomy-label.nrrd' % (path, index)
+    (r, modelImageNode) = slicer.util.loadVolume(modelImageFileName, {}, True)
+    (r, modelLabelNode) = slicer.util.loadLabelVolume(modelLabelFileName, {}, True)
 
     if not modelImageNode:
-        print "Could not find baseline image: %s." % modelImageFileName
+        print "Could not load baseline image: %s." % modelImageFileName
         return
 
     if not modelLabelNode:
-        print "Could not find baseline image: %s." % modelLabelFileName
+        print "Could not load baseline label: %s." % modelLabelFileName
         slicer.mrmlScene.RemoveNode(modelImageNode)
         return
 
     # Create 3D models
     print "Creating 3D surface models for %s " % modelLabelFileName
     modelHierarchyNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLModelHierarchyNode")
+
     #modelHierarchyNode.SetName("ModelHierarchy")
     slicer.mrmlScene.AddNode(modelHierarchyNode)
     CreateModels(modelLabelNode, modelHierarchyNode)
@@ -186,98 +338,22 @@ def ProcessCase(directory, caseIndex, reRegistration=False, outFileName=None):
     slicer.mrmlScene.RemoveNode(modelLabelNode)
 
     baseIndex = index
-    sindex = index-1
 
-    for index in range(sindex, 100):
+    #for index in range(sindex, 100):
+    while index <= MAX_INDEX:
 
-        print index
+        index = FindNextIndex(index, MAX_INDEX, path, 'needle-v-', '.nrrd')
 
-        # Load current needle image
-        needleImageFileName = '%s/needle-v-%02d.nrrd' % (path, index)
-        needleImageNode = None
+        if index < 0:
+            print "Could not find needle confirmation image in the range anymore."
+            return
 
-        if os.path.isfile(needleImageFileName):
-            (r, needleImageNode) = slicer.util.loadVolume(needleImageFileName, {}, True)
+        resultString = ProcessSeries(path, caseIndex, modelHierarchyNode, baseIndex, index, reRegistration)
 
-        if not needleImageNode:
-            print 'Could not find needle confirmation image: %s' % needleImageFileName
-            continue
+        if resultString:
+            resultFile.write(resultString)
 
-        # Load the corresponding trajectory data
-        trajectoryFilePath = '%s/Traj-%d.fcsv' % (path, index)
-        trajectoryNode = None
-        if os.path.isfile(trajectoryFilePath):
-            (r, trajectoryNode) = slicer.util.loadMarkupsFiducialList(trajectoryFilePath, True)
-
-        if not trajectoryNode:
-            print 'Could not find trajectory file: %s' % trajectoryFilePath
-            slicer.mrmlScene.RemoveNode(needleImageNode)
-            continue
-
-        print 'Processing series %d' % index
-
-        # Any manual transform?
-        manualTransformFileName = '%s/T-%02d-to-%02d-manual.h5' % (path, baseIndex, index)
-        transformNode = None
-        if os.path.isfile(manualTransformFileName):
-            print 'Series %02d: Manual transform has been found.' % index
-            (r, transformNode) = slicer.util.loadTransform(manualTransformFileName, True)
-
-        transformName = 'T-%02d-to-%02d' % (baseIndex, index)
-        transformFileName = '%s/%s.h5' % (path, transformName)
-
-        # If 're-registration' option is ON, any existing transform?
-        if (not reRegistration) and os.path.isfile(transformFileName):
-            print 'Series %02d: Existing transform has been found.' % index
-            (r, transformNode) = slicer.util.loadTransform(transformFileName, True)
-
-        # No manual / existing transform
-        if not transformNode:
-            print 'Series %02d: Finding initial transform.' % index
-            transformNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
-            slicer.mrmlScene.AddNode(transformNode)
-            transformNode.SetName(transformName)
-
-            RigidRegistration(modelImageNode, needleImageNode, transformNode)
-
-            # Create initialization transform
-            #transform.ApplyTransformMatrix(firstTransformMatrix)
-            slicer.util.saveNode(transformNode, path+'/'+transformName+'.h5')
-
-        # Once the transform is obtained, apply it to the models
-        TransformModelHierarchy(modelHierarchyNode, transformNode)
-
-        # Path Collision Analysis module
-        pcaLogic = PathCollisionAnalysis.PathCollisionAnalysisLogic()
-        [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject] = pcaLogic.CheckIntersections(modelHierarchyNode, trajectoryNode)
-
-        # Asume that the trajectory data traces the path from the tip to the base.
-        # The first entry point in the output represents the needle's entry point into the object.
-        nObjects = len(objectIDs)
-        for k in range(nObjects):
-            angles = entryAngles[k]
-            normals = normalVectors[k]
-            length = totalLengthInObject[k]
-            nEntry = 2
-            lb = ''
-            if len(angles) < 2:
-                lb = "%f, %f, %f, %f, %f, --, --, --" % (length, angles[0], normals[0][0], normals[0][1], normals[0][2])
-            else:
-                lb = "%f, %f, %f, %f, %f, %f, %f, %f, %f" % (length, angles[1], angles[0], normals[1][0], normals[1][1], normals[1][2], normals[0][0], normals[0][1], normals[0][2])
-
-            resultFile.write("%d, %d, %s, %s\n" % (caseIndex, index, objectNames[k], lb))
-
-        # Transform the models back to the original location
-        transformNode.Inverse()
-        TransformModelHierarchy(modelHierarchyNode, transformNode)
-
-        #### Load fiducial
-        # pcaLogic = PathCollisionAnalysis.PathCollisionAnalysisLogic()
-        # [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject] = pcaLogic.CheckIntersections(modelHierarchyNode, FiducialSelector.currentNode())
-
-        slicer.mrmlScene.RemoveNode(trajectoryNode)
-        slicer.mrmlScene.RemoveNode(needleImageNode)
-        slicer.mrmlScene.RemoveNode(transformNode)
+        index = index + 1
 
     RemoveModels(modelHierarchyNode)
     slicer.mrmlScene.RemoveNode(modelHierarchyNode)

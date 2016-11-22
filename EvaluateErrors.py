@@ -16,11 +16,14 @@ from slicer.ScriptedLoadableModule import *
 
 # This script requires CurveMaker module to measure the minimum distance between points and curves.
 
-path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
+#path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
 #path = '/home/develop/Projects/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
-dataFile = 'RobotCase-Log.csv'
+#dataFile = 'RobotCase-Log.csv'
 
 
+def main():
+    # This script is called from Slicer Python Console.
+    pass
 
 # Fit a circle and return the intersection and radius
 #   (intersect, radius) = FitCircle(p1, p2, p3)
@@ -34,7 +37,7 @@ def FitCircle(p1, p2, p3):
     # Compute the bisecting points between p1 and p2 (m1), and p2 and p3 (m2)
     m1 = (p1+p2)/2.0
     m2 = (p2+p3)/2.0
-    
+
     # Compute the normal vectors along the perpendicular bisectors
     v12 = (p2-p1)
     v23 = (p3-p2)
@@ -55,7 +58,7 @@ def FitCircle(p1, p2, p3):
     if norm_n < posErr:
         return 0
     n = n / norm_n
-    
+
     n1 = numpy.cross(v12, n)
     n2 = numpy.cross(v23, n)
 
@@ -86,7 +89,7 @@ def FitCircle(p1, p2, p3):
 
     a = nm2h*nm2h / numpy.inner(n2, m2h)
 
-  
+
     intersect = m2 + a * n2
 
     print intersect
@@ -95,9 +98,7 @@ def FitCircle(p1, p2, p3):
     #return (intersect, radius)
     return radius
 
-
-
-def main():
+def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
 
     # Open result file
     lt = time.localtime()
@@ -106,7 +107,7 @@ def main():
     resultFile = open(resultFilePath, 'a')
     #resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
     resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
-    
+
     # Initialize CurveMaker module
     slicer.util.selectModule('CurveMaker')
     cmlogic = slicer.modules.CurveMakerWidget.logic
@@ -128,9 +129,9 @@ def main():
     #depthStartIndex = -1
     #depthEndIndex = -1
     coreIndex = -1
-    
+
     caseData = []
-    
+
     with open(path+'/'+dataFile, 'rU') as f:
         reader = csv.reader(f)
 
@@ -150,7 +151,7 @@ def main():
                 #depthStartIndex = row.index('DepthStart')
                 #depthEndIndex = row.index('DepthEnd')
                 coreIndex = row.index('Core')
-                
+
             else:
                 case = int(row[caseIndex])
                 target = int(row[targetIndex])
@@ -175,16 +176,16 @@ def main():
     prevRobotTgtOffset = numpy.array([0.0, 0.0, 0.0])
     prevBiopsyTgtOffset = numpy.array([0.0, 0.0, 0.0])
     prevTransformIndex = None
-    
+
     #for (case, target, image, robotTgt, bevel, segment, depth, core) in caseData:
     for (case, target, image, robotTgt, bevel, segment, core) in caseData:
 
         newTarget = False
         if (case != prevCase) or (target != prevTarget):
             newTarget = True
-       
+
         print 'Processing for case=%d, image=%d...' % (case, image)
-        
+
         # Load targets
         targetsFilePath = '%s/Case%03d/Targets.fcsv' % (path, case)
         targetsNode = None
@@ -206,7 +207,7 @@ def main():
             transformFilePath = '%s/Case%03d/T-%02d.h5' % (path, case, image-1)
             (r, transformNode) = slicer.util.loadTransform(transformFilePath, True)
             transformIndexUsed = image-1
-            
+
         if not transformNode:
             print 'Could not find transform file -- Previous one is used.'
             slicer.mrmlScene.RemoveNode(targetsNode)
@@ -216,9 +217,9 @@ def main():
                 transformIndexUsed = prevTransformIndex
             else:
                 continue
-        
+
         prevTransformNodeIndex = transformIndexUsed
-        
+
         # Validate the target index
         nTargets = targetsNode.GetNumberOfFiducials()
         if target > nTargets:
@@ -245,7 +246,7 @@ def main():
 
         # Calculate the displacement of the target
         tgtDisplacement = numpy.array(biopsyTgt)-numpy.array(origTgt)
-        
+
         # Load trajectory
         trajectoryFilePath = '%s/Case%03d/Traj-%d.fcsv' % (path, case, image)
         trajectoryNode = None
@@ -268,7 +269,7 @@ def main():
         # Calculate targeting error
         (robotTgtDist, robotTgtOffset) = cmlogic.distanceToPoint(robotTgt, True)
         ## Note that the returned offest is a vector from the line to the target. Error vector is the inverse.
-        robotTgtOffset = -robotTgtOffset 
+        robotTgtOffset = -robotTgtOffset
         print 'TARGETING ERROR: %.3f, (%.3f, %.3f, %.3f)' % (robotTgtDist, robotTgtOffset[0], robotTgtOffset[1], -robotTgtOffset[2])
 
         # Calculate biopsy error
@@ -295,7 +296,7 @@ def main():
             # Compute curveture
             radius = FitCircle(numpy.array(posStart), numpy.array(posMid), numpy.array(posEnd))
 
-        
+
         # Convert bevel direction to angle
         bevelAngle = bevel*30.0
 
@@ -323,7 +324,7 @@ def main():
                 deltaRobotErrorAngle = deltaRobotErrorAngle + 360.0
             if deltaBiopsyErrorAngle < 0.0:
                 deltaBiopsyErrorAngle = deltaBiopsyErrorAngle + 360.0
-                
+
             prevRobotTgtOffset = robotTgtOffset
             prevBiopsyTgtOffset = biopsyTgtOffset
 
@@ -339,7 +340,7 @@ def main():
         #resultFile.write("%.3f,%.3f," % (depth[0], depth[1]))
         resultFile.write("%s," % core)
         resultFile.write("%.3f,%.3f,%.3f\n" % (tgtDisplacement[0], tgtDisplacement[1], tgtDisplacement[2]))
-                         
+
         cmlogic.SourceNode = None
         cmlogic.DestinationNode = None
         slicer.mrmlScene.RemoveNode(transformNode)
@@ -349,7 +350,7 @@ def main():
 
         prevCase = case
         prevTarget = target
-            
+
 
     if resultFile:
         resultFile.close()
@@ -357,5 +358,3 @@ def main():
 
 if __name__ ==  "__main__":
     main();
-
-
