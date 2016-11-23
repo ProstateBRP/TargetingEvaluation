@@ -157,16 +157,17 @@ def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSerie
 
     # Object name dictionary:
     objectNameDict = {
-    'Model_2_2': 1, # Prostate, 2
-    'Model_3_3' : 2, # Pelvic Diaphragm, 3
-    'Model_4_4' : 3, # Blubospongiosus m., 4
+    'Model_x_x'  : 0, # Not defined -- Reserved
+    'Model_2_2'  : 1,  # Prostate, 2
+    'Model_3_3'  : 2, # Pelvic Diaphragm, 3
+    'Model_4_4'  : 3, # Blubospongiosus m., 4
     'Model_16_16': 4, # Bulb of the Penus / Corpus Spongiosum, 16
-    'Model_5_5' : 5, # Ischiocavernosus m., 5
-    'Model_6_6' : 6, # Crus of the Penis / Corpus Cavernosum, 6
-    'Model_13_13' : 7, # Transverse Perineal m., 13
-    'Model_10_10' : 8, # Obturator internus m., 10
-    'Model_8_8': 9, # Rectum, 8
-    'Model_11_11': 11, # Pubic Arc
+    'Model_5_5'  : 5, # Ischiocavernosus m., 5
+    'Model_6_6'  : 6, # Crus of the Penis / Corpus Cavernosum, 6
+    'Model_13_13': 7, # Transverse Perineal m., 13
+    'Model_10_10': 8, # Obturator internus m., 10
+    'Model_8_8'  : 9, # Rectum, 8
+    'Model_11_11': 10, # Pubic Arc
     }
 
     print 'Processing series %d' % seriesIndex
