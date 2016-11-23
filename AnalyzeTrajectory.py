@@ -153,7 +153,7 @@ def FindNextIndex(startIndex, endIndex, path, prefix, postfix):
     return -1
 
 
-def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIndex, reRegistration=False):
+def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSeriesIndex, seriesIndex, reRegistration=False):
 
     # Object name dictionary:
     objectNameDict = {
@@ -166,6 +166,7 @@ def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIn
     'Model_13_13' : 7, # Transverse Perineal m., 13
     'Model_10_10' : 8, # Obturator internus m., 10
     'Model_8_8': 9, # Rectum, 8
+    'Model_11_11': 11, # Pubic Arc
     }
 
     print 'Processing series %d' % seriesIndex
@@ -236,10 +237,7 @@ def ProcessSeries(path, caseIndex, modelHierarchyNode, baseSeriesIndex, seriesIn
     entDirTable = [0.0] * nObjectsInDic
 
     for k in range(nObjects):
-        i = 0
-        if len(entryAngles[k]) >= 2:
-            i = 1
-
+        i = len(entryAngles[k]) - 1
         angle = entryAngles[k][i]
         normal = normalVectors[k][i]
         length = totalLengthInObject[k]
@@ -305,7 +303,8 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
     resultFile.write("Case, Traj, ")
     resultFile.write("Len_0, EntAng_0, EntDir_0, Len_1, EntAng_1, EntDir_1, Len_2, EntAng_2, EntDir_2, ")
     resultFile.write("Len_3, EntAng_3, EntDir_3, Len_4, EntAng_4, EntDir_4, Len_5, EntAng_5, EntDir_5, ")
-    resultFile.write("Len_6, EntAng_6, EntDir_6, Len_7, EntAng_7, EntDir_7, Len_8, EntAng_8, EntDir_8\n ")
+    resultFile.write("Len_6, EntAng_6, EntDir_6, Len_7, EntAng_7, EntDir_7, Len_8, EntAng_8, EntDir_8, ")
+    resultFile.write("Len_9, EntAng_9, EntDir_9\n ")
 
     MAX_INDEX = 100
 
@@ -359,7 +358,7 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
             print "Could not find needle confirmation image in the range anymore."
             break
 
-        resultString = ProcessSeries(path, caseIndex, modelHierarchyNode, baseIndex, index, reRegistration)
+        resultString = ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseIndex, index, reRegistration)
 
         if resultString:
             resultFile.write(resultString)
