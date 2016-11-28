@@ -10,10 +10,6 @@ import csv
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 
-# NOTE: The script assumes that there is a -1 offset between the image and transform indices,
-# because transforms are calculated from the previous images. (We used TSE for registration,
-# and VIBE for transform).
-
 # This script requires CurveMaker module to measure the minimum distance between points and curves.
 
 #path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene'
@@ -106,7 +102,7 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
     resultFilePath = path + '/' + resultFileName
     resultFile = open(resultFilePath, 'a')
     #resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
-    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
+    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, Core, TgtDispR, TgtDispA, TgtDispS, Finger, VIBE\n") ## CSV header
 
     # Initialize CurveMaker module
     slicer.util.selectModule('CurveMaker')
@@ -140,6 +136,7 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
                 caseIndex = row.index('Case')
                 targetIndex = row.index('Tgt')
                 imageIndex = row.index('MRI')
+                tseIndex = row.index('TSE')
                 robotTgtRIndex = row.index('TgtR')
                 robotTgtAIndex = row.index('TgtA')
                 robotTgtSIndex = row.index('TgtS')
@@ -151,11 +148,13 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
                 #depthStartIndex = row.index('DepthStart')
                 #depthEndIndex = row.index('DepthEnd')
                 coreIndex = row.index('Core')
+                fingerIndex = row.index('Finger')
 
             else:
                 case = int(row[caseIndex])
                 target = int(row[targetIndex])
                 image = int(row[imageIndex])
+                imageTSE = int(row[tseIndex])
                 robotTgtR = float(row[robotTgtRIndex])
                 robotTgtA = float(row[robotTgtAIndex])
                 robotTgtS = float(row[robotTgtSIndex])
@@ -167,9 +166,10 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
                 #depthStart = float(row[depthStartIndex])
                 #depthEnd = float(row[depthEndIndex])
                 core = row[coreIndex]
+                finger = row[fingerIndex]
 
                 #caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], [depthStart, depthEnd], core))
-                caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], core))
+                caseData.append((case, target, image, imageTSE, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], core, finger))
 
     prevCase = -1
     prevTarget = -1
@@ -178,7 +178,7 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
     prevTransformIndex = None
 
     #for (case, target, image, robotTgt, bevel, segment, depth, core) in caseData:
-    for (case, target, image, robotTgt, bevel, segment, core) in caseData:
+    for (case, target, image, imageTSE, robotTgt, bevel, segment, core, finger) in caseData:
 
         newTarget = False
         if (case != prevCase) or (target != prevTarget):
@@ -200,13 +200,15 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
         transformFilePath = '%s/Case%03d/T-%02d.h5' % (path, case, image)
         transformNode = None
         transformIndexUsed = image
+        isVIBE = (image != imageTSE)  ## VIBE image is used, when image != imageTSE
+
         if os.path.isfile(transformFilePath):
             (r, transformNode) = slicer.util.loadTransform(transformFilePath, True)
         else:
-            # Offset for image index. See the comment above.
-            transformFilePath = '%s/Case%03d/T-%02d.h5' % (path, case, image-1)
-            (r, transformNode) = slicer.util.loadTransform(transformFilePath, True)
-            transformIndexUsed = image-1
+            if imageTSE > 0:
+                transformFilePath = '%s/Case%03d/T-%02d.h5' % (path, case, imageTSE)
+                (r, transformNode) = slicer.util.loadTransform(transformFilePath, True)
+                transformIndexUsed = imageTSE
 
         if not transformNode:
             print 'Could not find transform file -- Previous one is used.'
@@ -339,7 +341,9 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
         resultFile.write("%s,%s,%s,%s," % (segment[0], segment[1], segment[2], segment[3]))
         #resultFile.write("%.3f,%.3f," % (depth[0], depth[1]))
         resultFile.write("%s," % core)
-        resultFile.write("%.3f,%.3f,%.3f\n" % (tgtDisplacement[0], tgtDisplacement[1], tgtDisplacement[2]))
+        resultFile.write("%.3f,%.3f,%.3f," % (tgtDisplacement[0], tgtDisplacement[1], tgtDisplacement[2]))
+        resultFile.write("%s," % finger)
+        resultFile.write("%d\n" % isVIBE)
 
         cmlogic.SourceNode = None
         cmlogic.DestinationNode = None

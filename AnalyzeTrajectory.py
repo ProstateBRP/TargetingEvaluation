@@ -172,53 +172,64 @@ def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSerie
 
     print 'Processing series %d' % seriesIndex
 
-    # Load current needle image
+    # File name for needle confirmation image
     needleImageFileName = '%s/needle-v-%02d.nrrd' % (path, seriesIndex)
     needleImageNode = None
 
-    (r, needleImageNode) = slicer.util.loadVolume(needleImageFileName, {}, True)
-    if not needleImageNode:
-        print 'Could not load needle confirmation image: %s' % needleImageFileName
+    # File names for transforms
+    transformNode = None
+    transformName = 'T-%02d-to-%02d' % (baseSeriesIndex, seriesIndex)
+    transformFileName = '%s/%s.h5' % (path, transformName)
+    manualTransformFileName = '%s/%s-manual.h5' % (path, transformName)
+
+    # File name for trajectory
+    trajectoryFilePath = '%s/Traj-%d.fcsv' % (path, seriesIndex)
+    trajectoryNode = None
+
+    # Any manual transform?
+    print "Checking manual transform %s" % manualTransformFileName
+    if os.path.isfile(manualTransformFileName):
+        print 'Series %02d: Manual transform has been found.' % seriesIndex
+        (r, transformNode) = slicer.util.loadTransform(manualTransformFileName, True)
+
+    if not transformNode:
+        # Load current needle image
+        (r, needleImageNode) = slicer.util.loadVolume(needleImageFileName, {}, True)
+        if not needleImageNode:
+            print 'Could not load needle confirmation image: %s' % needleImageFileName
+            return None
+
+        # If 're-registration' option is ON, any existing transform?
+        if (not reRegistration) and os.path.isfile(transformFileName):
+            print 'Series %02d: Existing transform has been found.' % seriesIndex
+            (r, transformNode) = slicer.util.loadTransform(transformFileName, True)
+
+        # No manual / existing transform -- run registration
+        if not transformNode:
+            print 'Series %02d: Finding initial transform.' % seriesIndex
+            transformNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
+            slicer.mrmlScene.AddNode(transformNode)
+            transformNode.SetName(transformName)
+
+            RigidRegistration(modelImageNode, needleImageNode, transformNode)
+
+            # Create initialization transform
+            #transform.ApplyTransformMatrix(firstTransformMatrix)
+            slicer.util.saveNode(transformNode, path+'/'+transformName+'.h5')
+
+    if not transformNode:
+        print 'Unable to generate transform.'
         return None
 
     # Load the corresponding trajectory data
-    trajectoryFilePath = '%s/Traj-%d.fcsv' % (path, seriesIndex)
-    trajectoryNode = None
     if os.path.isfile(trajectoryFilePath):
         (r, trajectoryNode) = slicer.util.loadMarkupsFiducialList(trajectoryFilePath, True)
 
     if not trajectoryNode:
         print 'Could not find trajectory file: %s' % trajectoryFilePath
+        slicer.mrmlScene.RemoveNode(transformNode)
         slicer.mrmlScene.RemoveNode(needleImageNode)
         return None
-
-    # Any manual transform?
-    manualTransformFileName = '%s/T-%02d-to-%02d-manual.h5' % (path, baseSeriesIndex, seriesIndex)
-    transformNode = None
-    if os.path.isfile(manualTransformFileName):
-        print 'Series %02d: Manual transform has been found.' % seriesIndex
-        (r, transformNode) = slicer.util.loadTransform(manualTransformFileName, True)
-
-    transformName = 'T-%02d-to-%02d' % (baseSeriesIndex, seriesIndex)
-    transformFileName = '%s/%s.h5' % (path, transformName)
-
-    # If 're-registration' option is ON, any existing transform?
-    if (not reRegistration) and os.path.isfile(transformFileName):
-        print 'Series %02d: Existing transform has been found.' % seriesIndex
-        (r, transformNode) = slicer.util.loadTransform(transformFileName, True)
-
-    # No manual / existing transform
-    if not transformNode:
-        print 'Series %02d: Finding initial transform.' % seriesIndex
-        transformNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
-        slicer.mrmlScene.AddNode(transformNode)
-        transformNode.SetName(transformName)
-
-        RigidRegistration(modelImageNode, needleImageNode, transformNode)
-
-        # Create initialization transform
-        #transform.ApplyTransformMatrix(firstTransformMatrix)
-        slicer.util.saveNode(transformNode, path+'/'+transformName+'.h5')
 
     # Once the transform is obtained, apply it to the models
     TransformModelHierarchy(modelHierarchyNode, transformNode)
@@ -305,7 +316,7 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
     resultFile.write("Len_0, EntAng_0, EntDir_0, Len_1, EntAng_1, EntDir_1, Len_2, EntAng_2, EntDir_2, ")
     resultFile.write("Len_3, EntAng_3, EntDir_3, Len_4, EntAng_4, EntDir_4, Len_5, EntAng_5, EntDir_5, ")
     resultFile.write("Len_6, EntAng_6, EntDir_6, Len_7, EntAng_7, EntDir_7, Len_8, EntAng_8, EntDir_8, ")
-    resultFile.write("Len_9, EntAng_9, EntDir_9\n ")
+    resultFile.write("Len_9, EntAng_9, EntDir_10, Len_10, EntAng_10, EntDir_10\n ")
 
     MAX_INDEX = 100
 
@@ -353,11 +364,16 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
     #for index in range(sindex, 100):
     while index <= MAX_INDEX:
 
-        index = FindNextIndex(index, MAX_INDEX, path, 'needle-v-', '.nrrd')
+        indexImage = FindNextIndex(index, MAX_INDEX, path, 'needle-v-', '.nrrd')
 
-        if index < 0:
-            print "Could not find needle confirmation image in the range anymore."
-            break
+        if indexImage < 0:
+            indexManualTrans = FindNextIndex(index, MAX_INDEX, path, 'T-%02d-to-' % baseIndex, '-manual.h5')
+            if indexManualTrans < 0:
+                print "Could not find needle confirmation image in the range anymore."
+                break
+            index = indexManualTrans
+        else:
+            index = indexImage
 
         resultString = ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseIndex, index, reRegistration)
 
@@ -369,6 +385,13 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
     RemoveModels(modelHierarchyNode)
     slicer.mrmlScene.RemoveNode(modelHierarchyNode)
     slicer.mrmlScene.RemoveNode(modelImageNode)
+
+def ProcessCaseBatch():
+
+    path = '/Users/junichi/Projects/BRP/BRPRobotCases/Scene'
+    cases = [246, 248, 249, 250, 251, 256, 257, 260, 263, 264, 266, 267, 375, 397, 401, 403, 405, 411, 416, 418, 423, 426, 433, 436, 442, 445, 448]
+    for c in cases:
+        ProcessCase(path, c, True)
 
 if __name__ ==  "__main__":
     main()

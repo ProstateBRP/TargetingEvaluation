@@ -10,7 +10,7 @@ import shutil
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 
-path = '/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/Case448'
+path = '/Users/junichi/Projects/BRP/BRPRobotCases/Scene/Case401'
 
 def main():
     registrationParameters = {}
@@ -49,19 +49,19 @@ def main():
     registrationParameters['maximumNumberOfEvaluations'] = 900
     registrationParameters['maximumNumberOfCorrections'] = 25
     registrationParameters['metricSamplingStrategy'] = 'Random'
-    
+
     resampleParameters = {}
     resampleParameters['pixelType'] = 'uchar'
     resampleParameters['interpolationMode'] = 'NearestNeighbor'
     resampleParameters['defaultValue'] = 0
-    resampleParameters['numberOfThreads'] = -1 
-    
-    
+    resampleParameters['numberOfThreads'] = -1
+
+
     # Find plannig image
     index = 0
     planningImageNode = None
     planningLabelNode = None
-    
+
     # Load planning image
     for index in range(1, 100):
         planningImageFileName ='%s/planning-%02d.nrrd' % (path, index)
@@ -73,27 +73,27 @@ def main():
 
     if not (planningImageNode and planningLabelNode):
         return
-    
+
     sindex = index
-    
+
     firstNeedleImageNode = None
     firstNeedleLabelNode = None
-    
+
     # Load first needle image
     for index in range(sindex, 100):
-    
+
         firstNeedleImageFileName ='%s/needle-t-%02d.nrrd' % (path, index)
         firstNeedleLabelFileName ='%s/needle-t-%02d-label.nrrd' % (path, index)
-    
+
         if os.path.isfile(firstNeedleImageFileName):
             (r, firstNeedleImageNode) = slicer.util.loadVolume(firstNeedleImageFileName, {}, True)
-    
+
         if os.path.isfile(firstNeedleLabelFileName):
             (r, firstNeedleLabelNode) = slicer.util.loadVolume(firstNeedleLabelFileName, {}, True)
-    
+
         if firstNeedleImageNode and firstNeedleLabelNode:
             break
-    
+
     if not firstNeedleLabelNode:
         return
 
@@ -107,14 +107,14 @@ def main():
         dst = '%s/T-%02d.h5' % (path, index)
         shutil.copyfile(manualTransformFileName, dst)
         (r, firstNeedleImageTransform) = slicer.util.loadTransform(manualTransformFileName, True)
-        
+
     else:
         # Register the planning image to the first needle image
         firstNeedleImageTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
         firstNeedleImageTransformName = 'T-%02d' % index
         slicer.mrmlScene.AddNode(firstNeedleImageTransform)
         firstNeedleImageTransform.SetName(firstNeedleImageTransformName)
-    
+
         registrationParameters['fixedVolume'] = firstNeedleImageNode.GetID()
         registrationParameters['movingVolume'] = planningImageNode.GetID()
         registrationParameters['linearTransform'] = firstNeedleImageTransform.GetID()
@@ -123,12 +123,12 @@ def main():
         registrationParameters['maskProcessingMode'] = 'ROI'
         registrationParameters['fixedBinaryVolume'] = firstNeedleLabelNode.GetID()
         registrationParameters['movingBinaryVolume'] = planningLabelNode.GetID()
-        slicer.cli.run(registrationCLI, None, registrationParameters, True)     
+        slicer.cli.run(registrationCLI, None, registrationParameters, True)
         slicer.util.saveNode(firstNeedleImageTransform, path+'/'+firstNeedleImageTransformName+'.h5')
 
     if not firstNeedleImageTransform:
         return
-    
+
     firstTransformMatrix = vtk.vtkMatrix4x4()
     firstNeedleImageTransform.GetMatrixTransformToParent(firstTransformMatrix)
 
@@ -136,20 +136,20 @@ def main():
     for index in range(sindex, 100):
 
         print index
-        
+
         # Load current needle image
         needleImageFileName ='%s/needle-t-%02d.nrrd' % (path, index)
         needleLabelFileName ='%s/needle-t-%02d-label.nrrd' % (path, index)
-    
+
         needleImageNode = None
         needleLabelNode = None
-        
+
         if os.path.isfile(needleImageFileName):
             (r, needleImageNode) = slicer.util.loadVolume(needleImageFileName, {}, True)
-    
+
         if not needleImageNode:
             continue
-        
+
         print 'Processing series %d' % index
 
         manualTransformFileName = '%s/T-%02d-init-manual.h5' % (path, index)
@@ -159,7 +159,7 @@ def main():
             shutil.copyfile(manualTransformFileName, dst)
             slicer.mrmlScene.RemoveNode(needleImageNode)
             continue
-        
+
         # Check if there is a label data
         if os.path.isfile(needleLabelFileName):
             (r, needleLabelNode) = slicer.util.loadVolume(needleLabelFileName, {}, True)
@@ -175,7 +175,7 @@ def main():
 
             if not initTransform:
                 print 'Series %02d: Finding initial transform.' % index
-                initTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")            
+                initTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
                 initTransformName = 'T-%02d-init' % index
                 slicer.mrmlScene.AddNode(initTransform)
                 initTransform.SetName(initTransformName)
@@ -189,13 +189,13 @@ def main():
                 registrationParameters['maskProcessingMode'] = 'NOMASK'
                 registrationParameters['fixedBinaryVolume'] = ''
                 registrationParameters['movingBinaryVolume'] = ''
-    
+
                 slicer.cli.run(registrationCLI, None, registrationParameters, True)
 
                 # Create initialization transform
                 initTransform.ApplyTransformMatrix(firstTransformMatrix)
                 slicer.util.saveNode(initTransform, path+'/'+initTransformName+'.h5')
-            
+
             if initTransform:
                 # Resample mask
                 needleLabelNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLScalarVolumeNode")
@@ -215,7 +215,7 @@ def main():
         needleImageTransform = slicer.mrmlScene.CreateNodeByClass("vtkMRMLLinearTransformNode")
         slicer.mrmlScene.AddNode(needleImageTransform)
         needleImageTransform.SetName(needleImageTransformName)
-    
+
         registrationParameters['fixedVolume'] = needleImageNode.GetID()
         registrationParameters['movingVolume'] = planningImageNode.GetID()
         registrationParameters['linearTransform'] = needleImageTransform.GetID()
@@ -230,15 +230,15 @@ def main():
         registrationParameters['maskProcessingMode'] = 'ROI'
         registrationParameters['fixedBinaryVolume'] = needleLabelNode.GetID()
         registrationParameters['movingBinaryVolume'] = planningLabelNode.GetID()
-        slicer.cli.run(registrationCLI, None, registrationParameters, True)     
-    
+        slicer.cli.run(registrationCLI, None, registrationParameters, True)
+
         slicer.util.saveNode(needleImageTransform, path+'/'+needleImageTransformName+'.h5')
-    
+
         slicer.mrmlScene.RemoveNode(needleImageNode)
         slicer.mrmlScene.RemoveNode(needleLabelNode)
         slicer.mrmlScene.RemoveNode(initTransform)
         slicer.mrmlScene.RemoveNode(needleImageTransform)
-        
+
     slicer.mrmlScene.RemoveNode(planningImageNode)
     slicer.mrmlScene.RemoveNode(planningLabelNode)
     slicer.mrmlScene.RemoveNode(firstNeedleImageNode)
