@@ -1,8 +1,8 @@
-#path = "/Users/junichi/Dropbox/Experiments/BRP/BRPRobotCases/Scene/"
 path = "/Users/junichi/Projects/BRP/BRPRobotCases/Scene"
 #dataFile = "result-2015-09-28-23-34-36.csv"
 #dataFile = "result-2015-10-28-09-09-31.csv"
-dataFile = "result-2016-09-28-11-49-46.csv"
+#dataFile = "result-2016-09-28-11-49-46.csv"
+dataFile = "Combined-result-2016-11-28-preliminary.csv"
 data = read.csv(sprintf("%s/%s", path, dataFile))
 
 # Process
@@ -234,7 +234,6 @@ pdf(sprintf("%s/test4.pdf", path))
 plot(data$EstimatedErrorAngle[maskForAngle & (data$EstimatedErrorAngle>=0.0)], data$DeltaTgtErrAngle[maskForAngle & (data$EstimatedErrorAngle>=0.0)], main="Bevel Tip Orientation vs Estimated Error Orientation (From the 1st Attempt)", xlab="Tip Orientation (deg)", ylab="Error Orientation (deg)")
 dev.off()
 
-
 #dev.new()
 #plot(data$SegmentLR, data$TgtErrR, main="Target Region (R/L) vs R-L Targeting Error", xlab="Target Region", ylab="R-L Targeting Error (mm)")
 #dev.new()
@@ -249,7 +248,6 @@ dev.off()
 #plot(data$SegmentZone, data$TgtErr, main="Target Region (PZ/CG/TZ) vs Targeting Error", xlab="Target Region (PZ/CG/TZ)", ylab="Targeting Error (mm)")
 
 
-
 ## Shift of the targets
 tgtDispRMS <- sqrt(mean(data$TgtDispR^2+data$TgtDispA^2+data$TgtDispS^2))
 print(sprintf('RMS Target Displacement: %f mm', tgtDispRMS))
@@ -257,6 +255,95 @@ print(sprintf('Target Displacement Right-Left: %f +/- %f mm', mean(data$TgtDispR
 print(sprintf('Target Displacement Anterior-Posterior: %f +/- %f mm', mean(data$TgtDispA), sd(data$TgtDispA)))
 print(sprintf('Target Displacement Superior-Inferior: %f +/- %f mm', mean(data$TgtDispS), sd(data$TgtDispS)))
 
+## Trajectory Analysis
+#
+# Objects -- see AnalyzeTrajectory.py
+#  0, # Not defined -- Reserved
+#  1, # Prostate, 2
+#  2, # Pelvic Diaphragm, 3
+#  3, # Bulbospongiosus m., 4
+#  4, # Bulb of the Penus / Corpus Spongiosum, 16
+#  5, # Ischiocavernosus m., 5
+#  6, # Crus of the Penis / Corpus Cavernosum, 6
+#  7, # Transverse Perineal m., 13
+#  8, # Obturator internus m., 10
+#  9, # Rectum, 8
+#  10,# Pubic Arc
+
+CompareImpact <- function(objName, lenData, angData) {
+  # Difference in accuracy
+  mask <- ((data$Finger == 0) & (data$VIBE == 1))
+  tgtWith <- data$TgtErr[mask & lenData > 0.0]
+  tgtWithout <- data$TgtErr[mask & lenData == 0.0]
+  print(sprintf("%s (Non-Intersect vs Intersect) : %.3f +/- %.3f (mm) vs %.3f +/- %.3f (mm)", objName, mean(tgtWithout), sd(tgtWithout), mean(tgtWith), sd(tgtWith)))
+}
+
+PlotImpact <- function(objName, paramName, paramUnit, param, errorName, errorUnit, error, isIntersec) {
+  # Correlation between intersecting length and error
+  mask <- ((data$Finger == 0) & (data$VIBE == 1))
+  pdf(sprintf("%s/Plot - %s vs %s -%s.pdf", path, paramName, errorName, objName))
+  p <- param[mask & isIntersec]
+  e <- error[mask & isIntersec]
+  R <- cor(p, e)
+  plot(p, e, main=sprintf("%s: %s vs %s (R=%f)", objName, paramName, errorName, R), xlab=sprintf("%s (%s)", paramName, paramUnit), ylab=sprintf("%s (%s)", errorName, errorUnit))
+  dev.off()
+}
+
+# Bevel tip vs error direction
+PlotImpact("Bevel Tip Angle", "Tip Direction", "deg", data$BevelAngle,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$BevelAngle > 0)
+
+CompareImpact("Intersection Prostate",               data$Len_1, data$EntAng_1)
+CompareImpact("Intersection Pelvic Diaphragm",       data$Len_2, data$EntAng_2)
+CompareImpact("Intersection Bulbospongiosus m.",     data$Len_3, data$EntAng_3)
+CompareImpact("Intersection Bulb of the Pneus",      data$Len_4, data$EntAng_4)
+CompareImpact("Intersection Ishiocavernosus m.",     data$Len_5, data$EntAng_5)
+CompareImpact("Intersection Crus of the Penis",      data$Len_6, data$EntAng_6)
+CompareImpact("Intersection Transverse Perineal m.", data$Len_7, data$EntAng_7)
+CompareImpact("Intersection Obturator internus m.",  data$Len_8, data$EntAng_8)
+CompareImpact("Intersection Rectum",                 data$Len_9, data$EntAng_9)
+CompareImpact("Intersection Pubic Arc",              data$Len_10, data$EntAng_10)
+
+PlotImpact("Prostate",               "Intersecting Length", "mm", data$Len_1, "Targeting Error", "mm", data$TgtErr, data$Len_1 > 0)
+PlotImpact("Pelvic Diaphragm",       "Intersecting Length", "mm", data$Len_2, "Targeting Error", "mm", data$TgtErr, data$Len_2 > 0)
+PlotImpact("Bulbospongiosus m.",     "Intersecting Length", "mm", data$Len_3, "Targeting Error", "mm", data$TgtErr, data$Len_3 > 0)
+PlotImpact("Bulb of the Pneus",      "Intersecting Length", "mm", data$Len_4, "Targeting Error", "mm", data$TgtErr, data$Len_4 > 0)
+PlotImpact("Ishiocavernosus m.",     "Intersecting Length", "mm", data$Len_5, "Targeting Error", "mm", data$TgtErr, data$Len_5 > 0)
+PlotImpact("Crus of the Penis",      "Intersecting Length", "mm", data$Len_6, "Targeting Error", "mm", data$TgtErr, data$Len_6 > 0)
+PlotImpact("Transverse Perineal m.", "Intersecting Length", "mm", data$Len_7, "Targeting Error", "mm", data$TgtErr, data$Len_7 > 0)
+PlotImpact("Obturator internus m.",  "Intersecting Length", "mm", data$Len_8, "Targeting Error", "mm", data$TgtErr, data$Len_8 > 0)
+PlotImpact("Rectum",                 "Intersecting Length", "mm", data$Len_9, "Targeting Error", "mm", data$TgtErr, data$Len_9 > 0)
+# PlotImpact("Pubic Arc",              "Length", "mm", data$Len_10, "Targeting Error", "mm", data$TgtErr, data$Len_10 > 0)
+
+# Re-calculate TgtErrAngle with a range [-pi, pi]
+errDir <- 180 * atan2(-data$TgtErrR, data$TgtErrA) / pi
+PlotImpact("Prostate",               "Entry Direction", "deg", data$EntDir_1,  "Targeting Error Direction", "deg", errDir, data$Len_1 > 0)
+PlotImpact("Pelvic Diaphragm",       "Entry Direction", "deg", data$EntDir_2,  "Targeting Error Direction", "deg", errDir, data$Len_2 > 0)
+PlotImpact("Bulbospongiosus m.",     "Entry Direction", "deg", data$EntDir_3,  "Targeting Error Direction", "deg", errDir, data$Len_3 > 0)
+PlotImpact("Bulb of the Pneus",      "Entry Direction", "deg", data$EntDir_4,  "Targeting Error Direction", "deg", errDir, data$Len_4 > 0)
+PlotImpact("Ishiocavernosus m.",     "Entry Direction", "deg", data$EntDir_5,  "Targeting Error Direction", "deg", errDir, data$Len_5 > 0)
+PlotImpact("Crus of the Penis",      "Entry Direction", "deg", data$EntDir_6,  "Targeting Error Direction", "deg", errDir, data$Len_6 > 0)
+PlotImpact("Transverse Perineal m.", "Entry Direction", "deg", data$EntDir_7,  "Targeting Error Direction", "deg", errDir, data$Len_7 > 0)
+PlotImpact("Obturator internus m.",  "Entry Direction", "deg", data$EntDir_8,  "Targeting Error Direction", "deg", errDir, data$Len_8 > 0)
+PlotImpact("Rectum",                 "Entry Direction", "deg", data$EntDir_9,  "Targeting Error Direction", "deg", errDir, data$Len_9 > 0)
+# PlotImpact("Pubic Arc",              "Direction", "deg", data$EntDir_10, "Targeting Error Direction", "deg", errDir, data$Len_10 > 0)
+
+PlotImpact("Prostate",               "Entry Angle", "deg", data$EntAng_1,  "Targeting Error", "mm", data$TgtErr, data$Len_1 > 0)
+PlotImpact("Pelvic Diaphragm",       "Entry Angle", "deg", data$EntAng_2,  "Targeting Error", "mm", data$TgtErr, data$Len_2 > 0)
+PlotImpact("Bulbospongiosus m.",     "Entry Angle", "deg", data$EntAng_3,  "Targeting Error", "mm", data$TgtErr, data$Len_3 > 0)
+PlotImpact("Bulb of the Pneus",      "Entry Angle", "deg", data$EntAng_4,  "Targeting Error", "mm", data$TgtErr, data$Len_4 > 0)
+PlotImpact("Ishiocavernosus m.",     "Entry Angle", "deg", data$EntAng_5,  "Targeting Error", "mm", data$TgtErr, data$Len_5 > 0)
+PlotImpact("Crus of the Penis",      "Entry Angle", "deg", data$EntAng_6,  "Targeting Error", "mm", data$TgtErr, data$Len_6 > 0)
+PlotImpact("Transverse Perineal m.", "Entry Angle", "deg", data$EntAng_7,  "Targeting Error", "mm", data$TgtErr, data$Len_7 > 0)
+PlotImpact("Obturator internus m.",  "Entry Angle", "deg", data$EntAng_8,  "Targeting Error", "mm", data$TgtErr, data$Len_8 > 0)
+PlotImpact("Rectum",                 "Entry Angle", "deg", data$EntAng_9,  "Targeting Error", "mm", data$TgtErr, data$Len_9 > 0)
 
 
-
+# maskForTrajectory <- ((data$Finger == 0) & (data$VIBE == 1))
+# print("=== Impact of Anatomical Structures ===")
+# TgtErrWithPD = data$TgtErr[maskForTrajectory & data$Len_2>0.0]
+# TgtErrWithoutPD = data$TgtErr[maskForTrajectory & data$Len_2==0.0]
+# print(sprintf("Pelvic Diaphragm (Non-Intersect vs Intersect) : %.3f +/- %.3f (mm) vs %.3f +/- %.3f (mm)", mean(TgtErrWithoutPD), sd(TgtErrWithoutPD), mean(TgtErrWithPD), sd(TgtErrWithPD)))
+#
+# TgtErrWithBSM = data$TgtErr[maskForTrajectory & data$Len_4>0.0]
+# TgtErrWithoutBSM = data$TgtErr[maskForTrajectory & data$Len_4==0.0]
+# print(sprintf("Bulbospongiosus m. (Non-Intersect vs Intersect) : %.3f +/- %.3f (mm) vs %.3f +/- %.3f (mm)", mean(TgtErrWithoutBSM), sd(TgtErrWithoutBSM), mean(TgtErrWithBSM), sd(TgtErrWithBSM)))

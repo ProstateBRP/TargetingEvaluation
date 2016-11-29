@@ -239,7 +239,7 @@ def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSerie
     [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject] = pcaLogic.CheckIntersections(modelHierarchyNode, trajectoryNode)
 
     # Asume that the trajectory data traces the path from the tip to the base.
-    # The first entry point in the output represents the needle's entry point into the object.
+    # The last entry point in the output represents the needle's entry point into the object.
     nObjects = len(objectIDs)
     resultString = ""
 
