@@ -236,7 +236,7 @@ def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSerie
 
     # Path Collision Analysis module
     pcaLogic = PathCollisionAnalysis.PathCollisionAnalysisLogic()
-    [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject] = pcaLogic.CheckIntersections(modelHierarchyNode, trajectoryNode)
+    [objectIDs, objectNames, normalVectors, entryAngles, totalLengthInObject, curvatures, radiusNormals] = pcaLogic.CheckIntersections(modelHierarchyNode, trajectoryNode)
 
     # Asume that the trajectory data traces the path from the tip to the base.
     # The last entry point in the output represents the needle's entry point into the object.
@@ -247,12 +247,16 @@ def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSerie
     lenTable = [0.0] * nObjectsInDic
     entAngTable = [0.0] * nObjectsInDic
     entDirTable = [0.0] * nObjectsInDic
+    curvatureTable = [0.0] * nObjectsInDic
+    centerDirTable = [0.0] * nObjectsInDic
 
     for k in range(nObjects):
         i = len(entryAngles[k]) - 1
         angle = entryAngles[k][i]
         normal = normalVectors[k][i]
         length = totalLengthInObject[k]
+        curvature = curvatures[k][i]
+        centerDir = radiusNormals[k][i]
 
         # Look up table index
         l = objectNameDict[objectNames[k]]
@@ -261,6 +265,12 @@ def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSerie
         # NOTE: It's not atan(y, x) because the angle is 0 when (x, y) = (0, 1).
         # Also note that the sign for x is negative, because it goes negative, when rotated clockwise from 0 degree.
         entDirTable[l] = math.atan2(-normal[0], normal[1]) * 180.0 / math.pi
+        if entDirTable[l] < 0.0:
+            entDirTable[l] = entDirTable[l] + 360.0
+        curvatureTable[l] = curvature
+        centerDirTable[l] = math.atan2(-centerDir[0], centerDir[1]) * 180.0 / math.pi
+        if centerDirTable[l] < 0.0:
+            centerDirTable[l] = centerDirTable[l] + 360.0
 
     # Transform the models back to the original location
     transformNode.Inverse()
@@ -276,7 +286,8 @@ def ProcessSeries(path, caseIndex, modelImageNode, modelHierarchyNode, baseSerie
 
     resultString = "%d, %d" % (caseIndex, seriesIndex)
     for i in range(0, nObjectsInDic):
-        resultString = resultString + ", %f, %f, %f" % (lenTable[i], entAngTable[i], entDirTable[i])
+        # Len,  EntAng,  EntDir,  Curv,  CentDir
+        resultString = resultString + ", %f, %f, %f, %f, %f" % (lenTable[i], entAngTable[i], entDirTable[i], curvatureTable[i], centerDirTable[i])
 
     resultString = resultString + "\n"
 
@@ -313,10 +324,17 @@ def ProcessCase(path, caseIndex, reRegistration=False, outFileName=None):
     # Print header
     # resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
     resultFile.write("Case, Traj, ")
-    resultFile.write("Len_0, EntAng_0, EntDir_0, Len_1, EntAng_1, EntDir_1, Len_2, EntAng_2, EntDir_2, ")
-    resultFile.write("Len_3, EntAng_3, EntDir_3, Len_4, EntAng_4, EntDir_4, Len_5, EntAng_5, EntDir_5, ")
-    resultFile.write("Len_6, EntAng_6, EntDir_6, Len_7, EntAng_7, EntDir_7, Len_8, EntAng_8, EntDir_8, ")
-    resultFile.write("Len_9, EntAng_9, EntDir_10, Len_10, EntAng_10, EntDir_10\n ")
+    resultFile.write("Len_0,  EntAng_0,  EntDir_0,  Curv_0,  CentDir_0, ")
+    resultFile.write("Len_1,  EntAng_1,  EntDir_1,  Curv_1,  CentDir_1, ")
+    resultFile.write("Len_2,  EntAng_2,  EntDir_2,  Curv_2,  CentDir_2, ")
+    resultFile.write("Len_3,  EntAng_3,  EntDir_3,  Curv_3,  CentDir_3, ")
+    resultFile.write("Len_4,  EntAng_4,  EntDir_4,  Curv_4,  CentDir_4, ")
+    resultFile.write("Len_5,  EntAng_5,  EntDir_5,  Curv_5,  CentDir_5, ")
+    resultFile.write("Len_6,  EntAng_6,  EntDir_6,  Curv_6,  CentDir_6, ")
+    resultFile.write("Len_7,  EntAng_7,  EntDir_7,  Curv_7,  CentDir_7, ")
+    resultFile.write("Len_8,  EntAng_8,  EntDir_8,  Curv_8,  CentDir_8, ")
+    resultFile.write("Len_9,  EntAng_9,  EntDir_9,  Curv_9,  CentDir_9, ")
+    resultFile.write("Len_10, EntAng_10, EntDir_10, Curv_10, CentDir_10\n")
 
     MAX_INDEX = 100
 
