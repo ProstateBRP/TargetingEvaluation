@@ -2,7 +2,8 @@ path = "/Users/junichi/Projects/BRP/BRPRobotCases/Scene"
 #dataFile = "result-2015-09-28-23-34-36.csv"
 #dataFile = "result-2015-10-28-09-09-31.csv"
 #dataFile = "result-2016-09-28-11-49-46.csv"
-dataFile = "Combined-result-2016-11-28-preliminary.csv"
+#dataFile = "Combined-result-2016-11-28-preliminary.csv"
+dataFile = "Combined-result-2016-12-06-preliminary.csv"
 data = read.csv(sprintf("%s/%s", path, dataFile))
 
 # Process
@@ -279,13 +280,25 @@ CompareImpact <- function(objName, lenData, angData) {
 }
 
 PlotImpact <- function(objName, paramName, paramUnit, param, errorName, errorUnit, error, isIntersec) {
-  # Correlation between intersecting length and error
   mask <- ((data$Finger == 0) & (data$VIBE == 1))
   pdf(sprintf("%s/Plot - %s vs %s -%s.pdf", path, paramName, errorName, objName))
   p <- param[mask & isIntersec]
   e <- error[mask & isIntersec]
   R <- cor(p, e)
   plot(p, e, main=sprintf("%s: %s vs %s (R=%f)", objName, paramName, errorName, R), xlab=sprintf("%s (%s)", paramName, paramUnit), ylab=sprintf("%s (%s)", errorName, errorUnit))
+  dev.off()
+}
+
+PlotImpactUnwrap <- function(objName, paramName, paramUnit, param, errorName, errorUnit, error, isIntersec) {
+  mask <- ((data$Finger == 0) & (data$VIBE == 1))
+  pdf(sprintf("%s/Plot - %s vs %s -%s (Unwrapped).pdf", path, paramName, errorName, objName))
+  p <- param[mask & isIntersec]
+  e <- error[mask & isIntersec]
+  ue <- e - (e - p > 180.0) * 360
+  ue <- ue + (e - p < -180.0) * 360
+  # ee <- ue - p
+  R <- cor(p, ue)
+  plot(p, ue, main=sprintf("%s: %s vs %s (R=%f)", objName, paramName, errorName, R), xlab=sprintf("%s (%s)", paramName, paramUnit), ylab=sprintf("%s (%s) (Unwrapped)", errorName, errorUnit))
   dev.off()
 }
 
@@ -315,16 +328,16 @@ PlotImpact("Rectum",                 "Intersecting Length", "mm", data$Len_9, "T
 # PlotImpact("Pubic Arc",              "Length", "mm", data$Len_10, "Targeting Error", "mm", data$TgtErr, data$Len_10 > 0)
 
 # Re-calculate TgtErrAngle with a range [-pi, pi]
-errDir <- 180 * atan2(-data$TgtErrR, data$TgtErrA) / pi
-PlotImpact("Prostate",               "Entry Direction", "deg", data$EntDir_1,  "Targeting Error Direction", "deg", errDir, data$Len_1 > 0)
-PlotImpact("Pelvic Diaphragm",       "Entry Direction", "deg", data$EntDir_2,  "Targeting Error Direction", "deg", errDir, data$Len_2 > 0)
-PlotImpact("Bulbospongiosus m.",     "Entry Direction", "deg", data$EntDir_3,  "Targeting Error Direction", "deg", errDir, data$Len_3 > 0)
-PlotImpact("Bulb of the Pneus",      "Entry Direction", "deg", data$EntDir_4,  "Targeting Error Direction", "deg", errDir, data$Len_4 > 0)
-PlotImpact("Ishiocavernosus m.",     "Entry Direction", "deg", data$EntDir_5,  "Targeting Error Direction", "deg", errDir, data$Len_5 > 0)
-PlotImpact("Crus of the Penis",      "Entry Direction", "deg", data$EntDir_6,  "Targeting Error Direction", "deg", errDir, data$Len_6 > 0)
-PlotImpact("Transverse Perineal m.", "Entry Direction", "deg", data$EntDir_7,  "Targeting Error Direction", "deg", errDir, data$Len_7 > 0)
-PlotImpact("Obturator internus m.",  "Entry Direction", "deg", data$EntDir_8,  "Targeting Error Direction", "deg", errDir, data$Len_8 > 0)
-PlotImpact("Rectum",                 "Entry Direction", "deg", data$EntDir_9,  "Targeting Error Direction", "deg", errDir, data$Len_9 > 0)
+# errDir <- 180 * atan2(-data$TgtErrR, data$TgtErrA) / pi
+PlotImpactUnwrap("Prostate",               "Entry Direction", "deg", data$EntDir_1,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_1 > 0)
+PlotImpactUnwrap("Pelvic Diaphragm",       "Entry Direction", "deg", data$EntDir_2,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_2 > 0)
+PlotImpactUnwrap("Bulbospongiosus m.",     "Entry Direction", "deg", data$EntDir_3,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_3 > 0)
+PlotImpactUnwrap("Bulb of the Pneus",      "Entry Direction", "deg", data$EntDir_4,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_4 > 0)
+PlotImpactUnwrap("Ishiocavernosus m.",     "Entry Direction", "deg", data$EntDir_5,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_5 > 0)
+PlotImpactUnwrap("Crus of the Penis",      "Entry Direction", "deg", data$EntDir_6,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_6 > 0)
+PlotImpactUnwrap("Transverse Perineal m.", "Entry Direction", "deg", data$EntDir_7,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_7 > 0)
+PlotImpactUnwrap("Obturator internus m.",  "Entry Direction", "deg", data$EntDir_8,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_8 > 0)
+PlotImpactUnwrap("Rectum",                 "Entry Direction", "deg", data$EntDir_9,  "Targeting Error Direction", "deg", data$TgtErrAngle, data$Len_9 > 0)
 # PlotImpact("Pubic Arc",              "Direction", "deg", data$EntDir_10, "Targeting Error Direction", "deg", errDir, data$Len_10 > 0)
 
 PlotImpact("Prostate",               "Entry Angle", "deg", data$EntAng_1,  "Targeting Error", "mm", data$TgtErr, data$Len_1 > 0)
@@ -336,6 +349,58 @@ PlotImpact("Crus of the Penis",      "Entry Angle", "deg", data$EntAng_6,  "Targ
 PlotImpact("Transverse Perineal m.", "Entry Angle", "deg", data$EntAng_7,  "Targeting Error", "mm", data$TgtErr, data$Len_7 > 0)
 PlotImpact("Obturator internus m.",  "Entry Angle", "deg", data$EntAng_8,  "Targeting Error", "mm", data$TgtErr, data$Len_8 > 0)
 PlotImpact("Rectum",                 "Entry Angle", "deg", data$EntAng_9,  "Targeting Error", "mm", data$TgtErr, data$Len_9 > 0)
+
+PlotImpactUnwrap("Prostate",               "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_1, data$Len_1 > 0.0 & data$BevelAngle >= 0.0)
+PlotImpactUnwrap("Pelvic Diaphragm",       "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_2, data$Len_2 > 0.0 & data$BevelAngle >= 0.0)
+PlotImpactUnwrap("Bulbospongiosus m.",     "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_3, data$Len_3 > 0.0 & data$BevelAngle >= 0.0)
+PlotImpactUnwrap("Bulb of the Pneus",      "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_4, data$Len_4 > 0.0 & data$BevelAngle >= 0.0)
+PlotImpactUnwrap("Ishiocavernosus m.",     "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_5, data$Len_5 > 0.0 & data$BevelAngle >= 0.0)
+PlotImpactUnwrap("Crus of the Penis",      "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_6, data$Len_6 > 0.0 & data$BevelAngle >= 0.0)
+PlotImpactUnwrap("Transverse Perineal m.", "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_7, data$Len_7 > 0.0 & data$BevelAngle >= 0.0)
+# PlotImpact("Obturator internus m.",  "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_8, data$Len_8 > 0.0 & data$BevelAngle >= 0.0)
+# PlotImpact("Rectum",                 "Tip Angle", "deg", data$BevelAngle,  "Curve Direction", "deg", data$CentDir_9, data$Len_9 > 0.0 & data$BevelAngle >= 0.0)
+
+PlotImpactUnwrap("Prostate",               "Entry Direction", "deg", data$EntDir_1,  "Curve Direction", "deg", data$CentDir_1, data$Len_1 > 0.0 & data$EntAng_1 >= 10.0 & data$EntAng_1 <= 80.0)
+PlotImpactUnwrap("Pelvic Diaphragm",       "Entry Direction", "deg", data$EntDir_2,  "Curve Direction", "deg", data$CentDir_2, data$Len_2 > 0.0 & data$EntAng_2 >= 10.0 & data$EntAng_2 <= 80.0)
+PlotImpactUnwrap("Bulbospongiosus m.",     "Entry Direction", "deg", data$EntDir_3,  "Curve Direction", "deg", data$CentDir_3, data$Len_3 > 0.0 & data$EntAng_3 >= 10.0 & data$EntAng_3 <= 80.0)
+PlotImpactUnwrap("Bulb of the Pneus",      "Entry Direction", "deg", data$EntDir_4,  "Curve Direction", "deg", data$CentDir_4, data$Len_4 > 0.0 & data$EntAng_4 >= 10.0 & data$EntAng_4 <= 80.0)
+PlotImpactUnwrap("Ishiocavernosus m.",     "Entry Direction", "deg", data$EntDir_5,  "Curve Direction", "deg", data$CentDir_5, data$Len_5 > 0.0 & data$EntAng_5 >= 10.0 & data$EntAng_5 <= 80.0)
+PlotImpactUnwrap("Crus of the Penis",      "Entry Direction", "deg", data$EntDir_6,  "Curve Direction", "deg", data$CentDir_6, data$Len_6 > 0.0 & data$EntAng_6 >= 10.0 & data$EntAng_6 <= 80.0)
+PlotImpactUnwrap("Transverse Perineal m.", "Entry Direction", "deg", data$EntDir_7,  "Curve Direction", "deg", data$CentDir_7, data$Len_7 > 0.0 & data$EntAng_7 >= 10.0 & data$EntAng_7 <= 80.0)
+PlotImpactUnwrap("Obturator internus m.",  "Entry Direction", "deg", data$EntDir_8,  "Curve Direction", "deg", data$CentDir_8, data$Len_8 > 0.0 & data$EntAng_8 >= 10.0 & data$EntAng_8 <= 80.0)
+PlotImpactUnwrap("Rectum",                 "Entry Direction", "deg", data$EntDir_9,  "Curve Direction", "deg", data$CentDir_9, data$Len_9 > 0.0 & data$EntAng_9 >= 10.0 & data$EntAng_9 <= 80.0)
+
+PlotImpact("Prostate",               "Entry Angle", "deg", data$EntAng_1,  "Curvature", "mm^-1", data$Curv_1, data$Len_1 > 0.0 & data$EntAng_1 >= 0.0 & data$EntAng_1 <= 90.0)
+PlotImpact("Pelvic Diaphragm",       "Entry Angle", "deg", data$EntAng_2,  "Curvature", "mm^-1", data$Curv_2, data$Len_2 > 0.0 & data$EntAng_2 >= 0.0 & data$EntAng_2 <= 90.0)
+PlotImpact("Bulbospongiosus m.",     "Entry Angle", "deg", data$EntAng_3,  "Curvature", "mm^-1", data$Curv_3, data$Len_3 > 0.0 & data$EntAng_3 >= 0.0 & data$EntAng_3 <= 90.0)
+PlotImpact("Bulb of the Pneus",      "Entry Angle", "deg", data$EntAng_4,  "Curvature", "mm^-1", data$Curv_4, data$Len_4 > 0.0 & data$EntAng_4 >= 0.0 & data$EntAng_4 <= 90.0)
+PlotImpact("Ishiocavernosus m.",     "Entry Angle", "deg", data$EntAng_5,  "Curvature", "mm^-1", data$Curv_5, data$Len_5 > 0.0 & data$EntAng_5 >= 0.0 & data$EntAng_5 <= 90.0)
+PlotImpact("Crus of the Penis",      "Entry Angle", "deg", data$EntAng_6,  "Curvature", "mm^-1", data$Curv_6, data$Len_6 > 0.0 & data$EntAng_6 >= 0.0 & data$EntAng_6 <= 90.0)
+PlotImpact("Transverse Perineal m.", "Entry Angle", "deg", data$EntAng_7,  "Curvature", "mm^-1", data$Curv_7, data$Len_7 > 0.0 & data$EntAng_7 >= 0.0 & data$EntAng_7 <= 90.0)
+PlotImpact("Obturator internus m.",  "Entry Angle", "deg", data$EntAng_8,  "Curvature", "mm^-1", data$Curv_8, data$Len_8 > 0.0 & data$EntAng_8 >= 0.0 & data$EntAng_8 <= 90.0)
+PlotImpact("Rectum",                 "Entry Angle", "deg", data$EntAng_9,  "Curvature", "mm^-1", data$Curv_9, data$Len_9 > 0.0 & data$EntAng_9 >= 0.0 & data$EntAng_9 <= 90.0)
+
+PlotImpact("Prostate",               "Intersecting Length", "mm", data$Len_1, "Curvature", "mm^-1", data$Curv_1, data$Len_1 > 0.0 & data$EntAng_1 >= 0.0 & data$EntAng_1 <= 90.0)
+PlotImpact("Pelvic Diaphragm",       "Intersecting Length", "mm", data$Len_2, "Curvature", "mm^-1", data$Curv_2, data$Len_2 > 0.0 & data$EntAng_2 >= 0.0 & data$EntAng_2 <= 90.0)
+PlotImpact("Bulbospongiosus m.",     "Intersecting Length", "mm", data$Len_3, "Curvature", "mm^-1", data$Curv_3, data$Len_3 > 0.0 & data$EntAng_3 >= 0.0 & data$EntAng_3 <= 90.0)
+PlotImpact("Bulb of the Pneus",      "Intersecting Length", "mm", data$Len_4, "Curvature", "mm^-1", data$Curv_4, data$Len_4 > 0.0 & data$EntAng_4 >= 0.0 & data$EntAng_4 <= 90.0)
+PlotImpact("Ishiocavernosus m.",     "Intersecting Length", "mm", data$Len_5, "Curvature", "mm^-1", data$Curv_5, data$Len_5 > 0.0 & data$EntAng_5 >= 0.0 & data$EntAng_5 <= 90.0)
+PlotImpact("Crus of the Penis",      "Intersecting Length", "mm", data$Len_6, "Curvature", "mm^-1", data$Curv_6, data$Len_6 > 0.0 & data$EntAng_6 >= 0.0 & data$EntAng_6 <= 90.0)
+PlotImpact("Transverse Perineal m.", "Intersecting Length", "mm", data$Len_7, "Curvature", "mm^-1", data$Curv_7, data$Len_7 > 0.0 & data$EntAng_7 >= 0.0 & data$EntAng_7 <= 90.0)
+PlotImpact("Obturator internus m.",  "Intersecting Length", "mm", data$Len_8, "Curvature", "mm^-1", data$Curv_8, data$Len_8 > 0.0 & data$EntAng_8 >= 0.0 & data$EntAng_8 <= 90.0)
+PlotImpact("Rectum",                 "Intersecting Length", "mm", data$Len_9, "Curvature", "mm^-1", data$Curv_9, data$Len_9 > 0.0 & data$EntAng_9 >= 0.0 & data$EntAng_9 <= 90.0)
+
+# curvatures
+print(sprintf("Cruvature at Prostate              : %f +/- %f", mean(data$Curv_1[data$Len_1>0.0]), sd(data$Curv_1[data$Len_1>0.0])))
+print(sprintf("Cruvature at Pelvic Diaphragm      : %f +/- %f", mean(data$Curv_2[data$Len_2>0.0]), sd(data$Curv_2[data$Len_2>0.0])))
+print(sprintf("Cruvature at Bulbospongiosus m.    : %f +/- %f", mean(data$Curv_3[data$Len_3>0.0]), sd(data$Curv_3[data$Len_3>0.0])))
+print(sprintf("Cruvature at Bulb of the Pneus     : %f +/- %f", mean(data$Curv_4[data$Len_4>0.0]), sd(data$Curv_4[data$Len_4>0.0])))
+print(sprintf("Cruvature at Ishiocavernosus m.    : %f +/- %f", mean(data$Curv_5[data$Len_5>0.0]), sd(data$Curv_5[data$Len_5>0.0])))
+print(sprintf("Cruvature at Crus of the Penis     : %f +/- %f", mean(data$Curv_6[data$Len_6>0.0]), sd(data$Curv_6[data$Len_6>0.0])))
+print(sprintf("Cruvature at Transverse Perineal m.: %f +/- %f", mean(data$Curv_7[data$Len_7>0.0]), sd(data$Curv_7[data$Len_7>0.0])))
+print(sprintf("Cruvature at Obturator internus m. : %f +/- %f", mean(data$Curv_8[data$Len_8>0.0]), sd(data$Curv_8[data$Len_8>0.0])))
+print(sprintf("Cruvature at Rectum                : %f +/- %f", mean(data$Curv_9[data$Len_9>0.0]), sd(data$Curv_9[data$Len_9>0.0])))
+
 
 
 # maskForTrajectory <- ((data$Finger == 0) & (data$VIBE == 1))
