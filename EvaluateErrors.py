@@ -220,7 +220,7 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
             else:
                 continue
 
-        prevTransformNodeIndex = transformIndexUsed
+        prevTransformIndex = transformIndexUsed
 
         # Validate the target index
         nTargets = targetsNode.GetNumberOfFiducials()
