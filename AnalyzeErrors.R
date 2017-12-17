@@ -3,7 +3,8 @@ path = "/Users/junichi/Projects/BRP/BRPRobotCases/Scene"
 #dataFile = "result-2015-10-28-09-09-31.csv"
 #dataFile = "result-2016-09-28-11-49-46.csv"
 #dataFile = "Combined-result-2016-11-28-preliminary.csv"
-dataFile = "Combined-result-2016-12-06-preliminary.csv"
+#dataFile = "Combined-result-2016-12-06-preliminary.csv"
+dataFile = "result-2017-04-27-wo-systematic.csv"
 data = read.csv(sprintf("%s/%s", path, dataFile))
 
 # Process
@@ -279,7 +280,7 @@ CompareImpact <- function(objName, lenData, angData) {
   print(sprintf("%s (Non-Intersect vs Intersect) : %.3f +/- %.3f (mm) vs %.3f +/- %.3f (mm)", objName, mean(tgtWithout), sd(tgtWithout), mean(tgtWith), sd(tgtWith)))
 }
 
-PlotImpact <- function(objName, paramName, paramUnit, param, errorName, errorUnit, error, isIntersec) {
+plotimpact <- function(objName, paramName, paramUnit, param, errorName, errorUnit, error, isIntersec) {
   mask <- ((data$Finger == 0) & (data$VIBE == 1))
   pdf(sprintf("%s/Plot - %s vs %s -%s.pdf", path, paramName, errorName, objName))
   p <- param[mask & isIntersec]

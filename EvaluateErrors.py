@@ -94,7 +94,7 @@ def FitCircle(p1, p2, p3):
     #return (intersect, radius)
     return radius
 
-def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
+def EvaluateErrors(path, dataFile='RobotCase-Log.csv', calibFile='RobotCalibration.csv'):
 
     # Open result file
     lt = time.localtime()
@@ -102,7 +102,7 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
     resultFilePath = path + '/' + resultFileName
     resultFile = open(resultFilePath, 'a')
     #resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, DepthStart, DepthEnd, Core, TgtDispR, TgtDispA, TgtDispS\n") ## CSV header
-    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, Core, TgtDispR, TgtDispA, TgtDispS, Finger, VIBE\n") ## CSV header
+    resultFile.write("Case, Series, Target, TgtErr, TgtErrR, TgtErrA, TgtErrS, TgtErrAngle, DeltaTgtErrAngle, BxErr, BxErrR, BxErrA, BxErrS, BxErrAngle, DeltaBxErrAngle, BevelAngle, EntryErrR, EntryErrA, EntryErrS, curveRadius, SegmentLR, SegmentZone, SegmentAB, SegmentAP, Core, TgtDispR, TgtDispA, TgtDispS, Finger, VIBE, InsertionLength\n") ## CSV header
 
     # Initialize CurveMaker module
     slicer.util.selectModule('CurveMaker')
@@ -171,6 +171,34 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
                 #caseData.append((case, target, image, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], [depthStart, depthEnd], core))
                 caseData.append((case, target, image, imageTSE, [robotTgtR, robotTgtA, robotTgtS], bevel, [segmentLR, segmentZone, segmentAB, segmentAP], core, finger))
 
+    # Read robot calibration
+    zframeCenter = {}
+    
+    with open(path+'/'+calibFile, 'rU') as f:
+        reader = csv.reader(f)
+        caseIndex = -1
+        
+        for row in reader:
+            print 'caseIndex = %d' % caseIndex
+            if caseIndex < 0: # First row
+                caseIndex = row.index('Case')
+                calibR11Index = row.index('R11')
+                calibR12Index = row.index('R12')
+                calibR13Index = row.index('R13')
+                calibXIndex = row.index('X')
+                calibR21Index = row.index('R21')
+                calibR22Index = row.index('R22')
+                calibR23Index = row.index('R23')
+                calibYIndex = row.index('Y')
+                calibR31Index = row.index('R31')
+                calibR32Index = row.index('R32')
+                calibR33Index = row.index('R33')
+                calibZIndex = row.index('Z')
+                caseIndex = 0
+            else:
+                case = int(row[caseIndex])
+                zframeCenter[case] = [float(row[calibXIndex]), float(row[calibYIndex]), float(row[calibZIndex])]
+                
     prevCase = -1
     prevTarget = -1
     prevRobotTgtOffset = numpy.array([0.0, 0.0, 0.0])
@@ -280,6 +308,10 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
         biopsyTgtOffset = -biopsyTgtOffset
         print 'BIOPSY ERROR: %.3f, (%.3f, %.3f, %.3f)' % (biopsyTgtDist, biopsyTgtOffset[0], biopsyTgtOffset[1], biopsyTgtOffset[2])
 
+        # Insertion length
+        insertionLength = cmlogic.CurveLength
+        print 'Insertion Length: %.3f' % (insertionLength)
+
         entryPointOffset = numpy.array([0.0, 0.0, 0.0])
         nFid = trajectoryNode.GetNumberOfFiducials()
         if  nFid > 0:
@@ -289,15 +321,20 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
             trajectoryNode.GetNthFiducialPosition(nFid-1,posStart)
             trajectoryNode.GetNthFiducialPosition(nFid/2,posMid)
             trajectoryNode.GetNthFiducialPosition(0,posEnd)
+
             # Error at the skin entry point, assuming the robot adjusts the trajectory to the main field. (If not, needle orientation
             # has to be obtained from the RobotCase-Log.csv)
-            entryPointOffset = numpy.array([posStart[0], posStart[1], 0.0]) - numpy.array([robotTgt[0], robotTgt[1], 0.0])
+            # Offest in z-direction is calculated based on the robot calibration data. The offset between the center of the z-frame and
+            # the needle guide is assumed to be 27 mm.
+            entryPointOffset = numpy.array([posStart[0], posStart[1], posStart[2]]) - numpy.array([robotTgt[0], robotTgt[1], zframeCenter[case][2]])
+            entryPointOffset[2] = entryPointOffset[2] - 27.0
+                                
             #trajectoryNode.GetNthFiducialPosition(nOfControlPoints-1,posEnd)
             #posEnd = [0.0, 0.0, 0.0]
 
+        
             # Compute curveture
             radius = FitCircle(numpy.array(posStart), numpy.array(posMid), numpy.array(posEnd))
-
 
         # Convert bevel direction to angle
         bevelAngle = bevel*30.0
@@ -343,8 +380,10 @@ def EvaluateErrors(path, dataFile='RobotCase-Log.csv'):
         resultFile.write("%s," % core)
         resultFile.write("%.3f,%.3f,%.3f," % (tgtDisplacement[0], tgtDisplacement[1], tgtDisplacement[2]))
         resultFile.write("%s," % finger)
-        resultFile.write("%d\n" % isVIBE)
+        resultFile.write("%d," % isVIBE)
+        resultFile.write("%.3f\n" % insertionLength)
 
+        
         cmlogic.SourceNode = None
         cmlogic.DestinationNode = None
         slicer.mrmlScene.RemoveNode(transformNode)

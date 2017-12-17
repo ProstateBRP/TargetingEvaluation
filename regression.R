@@ -1,11 +1,15 @@
 path <- "/Users/junichi/Projects/BRP/BRPRobotCases/Scene"
-dataFile <- "Combined-result-2016-12-06-preliminary.csv"
+#dataFile <- "Combined-result-2016-12-06-preliminary.csv"
+#dataFile <- "Combined-result-2017-04-27.csv"
+dataFile <- "Combined-result-2017-12-15.csv"
 rawdata <- read.csv(sprintf("%s/%s", path, dataFile))
 
-mask <- ((rawdata$Finger == 0) & (rawdata$VIBE == 1) & (rawdata$Len_1 > 0))
+mask <- ((rawdata$Finger == 0) & (rawdata$VIBE == 1) & (rawdata$Len_1 > 0) & rawdata$TgtErr < 20.0)
 
 data <- rawdata[mask, ]
 
+# Path length outside the structures of interest
+data$Len_0 <- data$InsertionLength - (data$Len_1 + data$Len_2 + data$Len_3 + data$Len_4 + data$Len_5 + data$Len_6 + data$Len_7 + data$Len_8 + data$Len_9 + data$Len_10)
 
 Concat <- function(data1, data2, name) {
     
@@ -41,12 +45,14 @@ AngleToVector <- function(data, srcName, dstName) {
 ## 1. Simple model based on the length
 RunSimpleModel <- function(data) {
 
-    subdata <- data[c("TgtErr", "Len_1", "Len_2", "Len_3", "Len_4", "Len_5", "Len_6", "Len_7", "Len_8", "Len_9")]
+    subdata <- data[c("TgtErr", "Len_0", "Len_1", "Len_2", "Len_3", "Len_4", "Len_5", "Len_6", "Len_7", "Len_8", "Len_9")]
     plot(subdata, pch=16, col="blue", main="Matrix Scatterplot of Targeting Error and Length in Each Structure")
     
     set.seed(1)
     
     TgtErr.c = scale(subdata$TgtErr, center=TRUE, scale=FALSE)
+
+    Len_0.c = scale(subdata$Len_0, center=TRUE, scale=FALSE)
     Len_1.c = scale(subdata$Len_1, center=TRUE, scale=FALSE)
     Len_2.c = scale(subdata$Len_2, center=TRUE, scale=FALSE)
     Len_3.c = scale(subdata$Len_3, center=TRUE, scale=FALSE)
@@ -57,11 +63,13 @@ RunSimpleModel <- function(data) {
     Len_8.c = scale(subdata$Len_8, center=TRUE, scale=FALSE)
     Len_9.c = scale(subdata$Len_9, center=TRUE, scale=FALSE)
     
-    new.c.vars <- cbind(TgtErr.c,Len_1.c,Len_2.c,Len_3.c,Len_4.c,Len_5.c,Len_6.c,Len_7.c,Len_8.c,Len_9.c)
+    new.c.vars <- cbind(TgtErr.c,Len_0.c,Len_1.c,Len_2.c,Len_3.c,Len_4.c,Len_5.c,Len_6.c,Len_7.c,Len_8.c,Len_9.c)
     subdata <- cbind(subdata, new.c.vars)
-    names(subdata)[11:20] = c("TgtErr.c","Len_1.c","Len_2.c","Len_3.c","Len_4.c","Len_5.c","Len_6.c","Len_7.c","Len_8.c","Len_9.c")
+    names(subdata)[11:21] = c("TgtErr.c","Len_0.c","Len_1.c","Len_2.c","Len_3.c","Len_4.c","Len_5.c","Len_6.c","Len_7.c","Len_8.c","Len_9.c")
     
-    mod1 = lm(TgtErr.c ~ Len_1.c + Len_2.c + Len_3.c + Len_4.c + Len_5.c + Len_6.c + Len_7.c + Len_8.c + Len_9.c, data=subdata)
+    mod1 = lm(TgtErr.c ~ Len_0.c + Len_1.c + Len_2.c + Len_3.c + Len_4.c + Len_5.c + Len_6.c + Len_7.c + Len_8.c + Len_9.c, data=subdata)
+    mod1 = lm(TgtErr.c ~ Len_0.c + Len_1.c + Len_2.c + Len_3.c + Len_4.c + Len_5.c + Len_6.c + Len_8.c, data=subdata)
+    #mod1 = lm(TgtErr.c ~ Len_0.c + Len_1.c + Len_2.c + Len_3.c + Len_4.c, data=subdata)
 
     print (summary(mod1))
     #return (subdata)
@@ -76,7 +84,8 @@ RunBevelTipModel <- function(data) {
     # bevelNorm <- Concat(bevelNormR, bevelNormA, "bevelNorm")
 
     bevelNorm <- AngleToVector(data, "BevelAngle", "bevelNorm")
-    
+
+    ConcatLen_0 <- Concat(data[c("Len_0")], data[c("Len_0")], "Len_0")
     ConcatLen_1 <- Concat(data[c("Len_1")], data[c("Len_1")], "Len_1")
     ConcatLen_2 <- Concat(data[c("Len_2")], data[c("Len_2")], "Len_2")
     ConcatLen_3 <- Concat(data[c("Len_3")], data[c("Len_3")], "Len_3")
@@ -88,6 +97,7 @@ RunBevelTipModel <- function(data) {
     ConcatLen_9 <- Concat(data[c("Len_9")], data[c("Len_9")], "Len_9")
     
     # Len * bevelNorm
+    lenBevelNorm_0 <- bevelNorm * ConcatLen_0
     lenBevelNorm_1 <- bevelNorm * ConcatLen_1 
     lenBevelNorm_2 <- bevelNorm * ConcatLen_2
     lenBevelNorm_3 <- bevelNorm * ConcatLen_3
@@ -100,13 +110,14 @@ RunBevelTipModel <- function(data) {
 
     TgtErr <- ConcatRA(data, "TgtErr")
 
-    new.vars <- cbind(TgtErr,lenBevelNorm_1,lenBevelNorm_2,lenBevelNorm_3,lenBevelNorm_4,lenBevelNorm_5,lenBevelNorm_6,lenBevelNorm_7,lenBevelNorm_8,lenBevelNorm_9)
-    names(new.vars)[2:10] <- c("LenBevelNorm_1","LenBevelNorm_2","LenBevelNorm_3","LenBevelNorm_4","LenBevelNorm_5","LenBevelNorm_6","LenBevelNorm_7","LenBevelNorm_8","LenBevelNorm_9")
+    new.vars <- cbind(TgtErr,lenBevelNorm_0,lenBevelNorm_1,lenBevelNorm_2,lenBevelNorm_3,lenBevelNorm_4,lenBevelNorm_5,lenBevelNorm_6,lenBevelNorm_7,lenBevelNorm_8,lenBevelNorm_9)
+    names(new.vars)[2:11] <- c("LenBevelNorm_0","LenBevelNorm_1","LenBevelNorm_2","LenBevelNorm_3","LenBevelNorm_4","LenBevelNorm_5","LenBevelNorm_6","LenBevelNorm_7","LenBevelNorm_8","LenBevelNorm_9")
 
     plot(new.vars, pch=16, col="blue", main="Matrix Scatterplot of Targeting Error and Length in Each Structure")
 
     
     TgtErr.c = scale(TgtErr, center=TRUE, scale=FALSE)
+    lenBevelNorm_0.c = scale(lenBevelNorm_0, center=TRUE, scale=FALSE)
     lenBevelNorm_1.c = scale(lenBevelNorm_1, center=TRUE, scale=FALSE)
     lenBevelNorm_2.c = scale(lenBevelNorm_2, center=TRUE, scale=FALSE)
     lenBevelNorm_3.c = scale(lenBevelNorm_3, center=TRUE, scale=FALSE)
@@ -117,14 +128,15 @@ RunBevelTipModel <- function(data) {
     lenBevelNorm_8.c = scale(lenBevelNorm_8, center=TRUE, scale=FALSE)
     lenBevelNorm_9.c = scale(lenBevelNorm_9, center=TRUE, scale=FALSE)
 
-    new.vars.c <- cbind(TgtErr.c,lenBevelNorm_1.c,lenBevelNorm_2.c,lenBevelNorm_3.c,lenBevelNorm_4.c,lenBevelNorm_5.c,lenBevelNorm_6.c,lenBevelNorm_7.c,lenBevelNorm_8.c,lenBevelNorm_9.c)
+    new.vars.c <- cbind(TgtErr.c,lenBevelNorm_0.c,lenBevelNorm_1.c,lenBevelNorm_2.c,lenBevelNorm_3.c,lenBevelNorm_4.c,lenBevelNorm_5.c,lenBevelNorm_6.c,lenBevelNorm_7.c,lenBevelNorm_8.c,lenBevelNorm_9.c)
 
     new.vars <- cbind(new.vars, new.vars.c)
-    names(new.vars)[11:20] <- c("TgtErr.c", "LenBevelNorm_1.c","LenBevelNorm_2.c","LenBevelNorm_3.c","LenBevelNorm_4.c","LenBevelNorm_5.c","LenBevelNorm_6.c","LenBevelNorm_7.c","LenBevelNorm_8.c","LenBevelNorm_9.c")
-
+    names(new.vars)[12:22] <- c("TgtErr.c", "LenBevelNorm_0.c","LenBevelNorm_1.c","LenBevelNorm_2.c","LenBevelNorm_3.c","LenBevelNorm_4.c","LenBevelNorm_5.c","LenBevelNorm_6.c","LenBevelNorm_7.c","LenBevelNorm_8.c","LenBevelNorm_9.c")
 
     set.seed(1)
-    mod1 = lm(TgtErr.c ~ LenBevelNorm_1.c + LenBevelNorm_2.c + LenBevelNorm_3.c + LenBevelNorm_4.c + LenBevelNorm_5.c + LenBevelNorm_6.c + LenBevelNorm_7.c + LenBevelNorm_8.c + LenBevelNorm_9.c, data=new.vars)
+    mod1 = lm(TgtErr.c ~ LenBevelNorm_0.c + LenBevelNorm_1.c + LenBevelNorm_2.c + LenBevelNorm_3.c + LenBevelNorm_4.c + LenBevelNorm_5.c + LenBevelNorm_6.c + LenBevelNorm_7.c + LenBevelNorm_8.c + LenBevelNorm_9.c, data=new.vars)
+    #mod1 = lm(TgtErr.c ~ LenBevelNorm_0.c + LenBevelNorm_1.c + LenBevelNorm_4.c + LenBevelNorm_7.c + LenBevelNorm_8.c + LenBevelNorm_9.c, data=new.vars)
+    #mod1 = lm(TgtErr.c ~ LenBevelNorm_0.c + LenBevelNorm_1.c + LenBevelNorm_2.c + LenBevelNorm_3.c + LenBevelNorm_4.c, data=new.vars)
 
     print(summary(mod1))
 
@@ -202,10 +214,13 @@ RunInterfaceModel <- function(data) {
     set.seed(1)
     
     mod1 = lm(TgtErr.c ~ BendForceVec_1.c + BendForceVec_2.c + BendForceVec_3.c + BendForceVec_4.c + BendForceVec_5.c + BendForceVec_6.c + BendForceVec_7.c + BendForceVec_8.c + BendForceVec_9.c, data=new.vars)
+    #mod1 = lm(TgtErr.c ~ BendForceVec_1.c + BendForceVec_4.c + BendForceVec_8.c, data=new.vars)
+    #mod1 = lm(TgtErr.c ~ BendForceVec_1.c + BendForceVec_2.c + BendForceVec_3.c + BendForceVec_4.c, data=new.vars)
     #mod1 = lm(TgtErr.c ~ BendForceVec_1.c + BendForceVec_3.c + BendForceVec_4.c + BendForceVec_7.c + BendForceVec_8.c, data=new.vars)
 
     print(summary(mod1))
 
 }
 
-    
+
+
